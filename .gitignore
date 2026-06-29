@@ -1,0 +1,10 @@
+node_modules/
+.env
+uploads/students/*
+uploads/staff/*
+uploads/documents/*
+!uploads/students/.gitkeep
+!uploads/staff/.gitkeep
+!uploads/documents/.gitkeep
+*.log
+.DS_Store
