@@ -24,7 +24,14 @@ export const ACTIVE_ROLES = SUPER_ADMIN_ENABLED
 // Roles whose data access spans ALL branches rather than being scoped to one.
 export const CROSS_BRANCH_ROLES = [ROLES.SUPER_ADMIN, ROLES.ACCOUNTS_MANAGER];
 
-export const BRANCHES = ["Hyderabad", "Secunderabad", "Kukatpally", "Miyapur"];
+export const BRANCHES = [
+  "Hyderabad",
+  "Secunderabad",
+  "Kukatpally",
+  "Miyapur",
+  "Kishnabagh",
+  "AYS",
+];
 
 export const STATES = [
   "Telangana",
