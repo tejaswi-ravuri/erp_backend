@@ -6,8 +6,15 @@ import {
   signRefreshToken,
   verifyRefreshToken,
 } from "../utils/tokens.js";
-import { ACTIVE_ROLES, CROSS_BRANCH_ROLES } from "../config/constants.js";
+import { ACTIVE_ROLES, MULTI_BRANCH_ROLES } from "../config/constants.js";
 
+const refreshCookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/api/auth/refresh",
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+};
 function issueTokens(user) {
   return {
     accessToken: signAccessToken(user),
@@ -18,7 +25,7 @@ function issueTokens(user) {
 // POST /api/auth/login
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-
+  console.log(req.body);
   if (!email || !password) {
     throw new ApiError(400, "Email and password are required.");
   }
@@ -43,13 +50,19 @@ export const login = asyncHandler(async (req, res) => {
   await user.save();
 
   const { accessToken, refreshToken } = issueTokens(user);
-  console.log("tokens--", accessToken);
-  res.json({ user: user.toSafeJSON(), accessToken, refreshToken });
+
+  res.cookie("refreshToken", refreshToken, refreshCookieOptions);
+
+  res.json({
+    user: user.toSafeJSON(),
+    accessToken,
+  });
 });
 
 // POST /api/auth/refresh
 export const refresh = asyncHandler(async (req, res) => {
-  const { refreshToken } = req.body;
+  console.log("refresh token hitting");
+  const refreshToken = req.cookies.refreshToken;
   if (!refreshToken) throw new ApiError(400, "refreshToken is required.");
 
   let payload;
@@ -71,16 +84,26 @@ export const refresh = asyncHandler(async (req, res) => {
   }
 
   const { accessToken, refreshToken: newRefreshToken } = issueTokens(user);
-  res.json({ accessToken, refreshToken: newRefreshToken });
+
+  res.cookie("refreshToken", newRefreshToken, refreshCookieOptions);
+
+  res.json({
+    accessToken,
+  });
 });
 
 // POST /api/auth/logout
-// Bumps the refresh token version, invalidating every outstanding refresh
-// token for this user (this device and any other active session).
 export const logout = asyncHandler(async (req, res) => {
   req.user.refresh_token_version += 1;
   await req.user.save();
-  res.json({ success: true });
+
+  res.clearCookie("refreshToken", {
+    path: "/api/auth/refresh",
+  });
+
+  res.json({
+    success: true,
+  });
 });
 
 // GET /api/auth/me
@@ -133,12 +156,17 @@ export const createUser = asyncHandler(async (req, res) => {
   if (!ACTIVE_ROLES.includes(role)) {
     throw new ApiError(400, `Role '${role}' is not currently active.`);
   }
-  if (!CROSS_BRANCH_ROLES.includes(role) && !branch) {
+  if (!MULTI_BRANCH_ROLES.includes(role) && !branch) {
     throw new ApiError(400, "branch is required for this role.");
   }
 
   // A non-super-admin creator (e.g. Principal) can only create users within their own branch.
-  if (req.user.role !== "super_admin" && branch && branch !== req.user.branch) {
+  // createUser
+  if (
+    req.user.role !== "super_admin" &&
+    branch &&
+    String(branch) !== String(req.user.branch)
+  ) {
     throw new ApiError(403, "You can only create users for your own branch.");
   }
 
@@ -151,7 +179,7 @@ export const createUser = asyncHandler(async (req, res) => {
     email,
     password,
     role,
-    branch: CROSS_BRANCH_ROLES.includes(role) ? branch || null : branch,
+    branch: MULTI_BRANCH_ROLES.includes(role) ? branch || null : branch,
     phone,
     linked_staff_id: linked_staff_id || null,
     linked_student_id: linked_student_id || null,
@@ -177,8 +205,13 @@ export const updateUser = asyncHandler(async (req, res) => {
   const target = await User.findById(req.params.id);
   if (!target) throw new ApiError(404, "User not found.");
 
-  if (req.user.role !== "super_admin" && target.branch !== req.user.branch) {
-    throw new ApiError(403, "You can only manage users in your own branch.");
+  // createUser
+  if (
+    req.user.role !== "super_admin" &&
+    branch &&
+    String(branch) !== String(req.user.branch)
+  ) {
+    throw new ApiError(403, "You can only create users for your own branch.");
   }
 
   const allowedFields = [
@@ -189,6 +222,8 @@ export const updateUser = asyncHandler(async (req, res) => {
     "role",
     "linked_staff_id",
     "linked_student_id",
+    "subject_assignments",
+    "classes_assigned",
   ];
   for (const field of allowedFields) {
     if (field in req.body) target[field] = req.body[field];

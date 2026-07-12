@@ -1,8 +1,26 @@
 import { ApiError } from "../utils/ApiError.js";
 
 export function errorHandler(err, req, res, next) {
+  console.error("================================");
+  console.error("Name:", err.name);
+  console.error("Message:", err.message);
+
   if (err instanceof ApiError) {
-    return res.status(err.statusCode).json({ error: err.message, details: err.details });
+    console.error("Status:", err.statusCode);
+    console.error("Details:", err.details);
+  } else {
+    console.error(err);
+  }
+
+  console.error("================================");
+
+  // Custom application errors (ApiError) — must come first so its
+  // intended statusCode isn't swallowed by the generic 500 fallback below.
+  if (err instanceof ApiError) {
+    return res.status(err.statusCode).json({
+      error: err.message,
+      details: err.details,
+    });
   }
 
   // Mongoose validation errors
@@ -33,5 +51,7 @@ export function errorHandler(err, req, res, next) {
 }
 
 export function notFound(req, res) {
-  res.status(404).json({ error: `Route not found: ${req.method} ${req.originalUrl}` });
+  res
+    .status(404)
+    .json({ error: `Route not found: ${req.method} ${req.originalUrl}` });
 }

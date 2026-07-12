@@ -6,13 +6,14 @@
   "description": "MasterMinds ERP backend - Node/Express/MongoDB, multi-branch, role-based",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "nodemon server.js",
     "dev": "nodemon server.js",
     "seed": "node src/utils/seed.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.5.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.1",
