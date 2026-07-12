@@ -11,7 +11,9 @@ expenditureRoutes.use(requireAuth);
 expenditureRoutes.get("/", expenditureController.list);
 expenditureRoutes.post("/", expenditureController.create);
 expenditureRoutes.put("/:id", expenditureController.update);
-expenditureRoutes.delete("/:id", expenditureController.remove);
+expenditureRoutes.post("/:id/request-delete", expenditureController.requestDelete);
+expenditureRoutes.post("/:id/approve-delete", expenditureController.approveDelete);
+expenditureRoutes.post("/:id/reject-delete", expenditureController.rejectDelete);
 
 export default expenditureRoutes;
 

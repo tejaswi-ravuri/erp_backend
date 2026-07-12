@@ -4,7 +4,7 @@ import { addressSchema } from "./_addressSchema.js";
 
 const branchSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true }, // "Kukatpally"
+    name: { type: String, required: true, trim: true },
     code: {
       type: String,
       required: true,

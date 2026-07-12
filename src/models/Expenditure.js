@@ -1,6 +1,21 @@
 import mongoose from "mongoose";
 import { withCommonFields } from "./_baseSchema.js";
 
+// Same chart of accounts as FeePayment.payment_mode (plus Bank Transfer) -
+// kept as an independent list here since expenditure and fee payments are
+// separate ledgers and shouldn't drift together by accident.
+const PAYMENT_MODES = [
+  "Cash",
+  "Cheque",
+  "Bank Transfer",
+  "Swipe machine",
+  "Paytm",
+  "GooglePay",
+  "PhonePay",
+  "OnlineTransfer",
+  "Others",
+];
+
 const expenditureSchema = new mongoose.Schema({
   exp_id: { type: String },
   category: {
@@ -78,6 +93,14 @@ const expenditureSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   date: { type: Date, required: true },
   paid_to: { type: String },
+  payment_mode: { type: String, enum: PAYMENT_MODES, default: "Cash" },
+  // Payment-mode-specific details - which of these apply depends on
+  // payment_mode (see PAYMENT_MODE_FIELDS in expenditureController.js),
+  // mirroring FeePayment's Cheque/OnlineTransfer proof fields.
+  transaction_no: { type: String },
+  cheque_date: { type: Date },
+  bank_name: { type: String },
+  bank_branch: { type: String },
   approved_by: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   branch: {
     type: mongoose.Schema.Types.ObjectId,
@@ -85,6 +108,18 @@ const expenditureSchema = new mongoose.Schema({
     required: true,
     index: true,
   },
+
+  // Delete-approval workflow: deleting a record is a two-step process -
+  // any role with delete permission can request it, but only an Admin
+  // Officer assigned to the record's branch can approve (or reject) it.
+  // The record is only actually removed once approved.
+  delete_requested: { type: Boolean, default: false },
+  delete_requested_by: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null,
+  },
+  delete_requested_at: { type: Date, default: null },
 });
 
 withCommonFields(expenditureSchema);
