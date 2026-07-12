@@ -29,6 +29,8 @@ const incomeSchema = new mongoose.Schema({
       "TC and Bonafide",
       "Other Income",
       "Cash Withdrawal",
+      "Annual Fee",
+      "Graduation Fee",
     ],
   },
   date: { type: Date, required: true },

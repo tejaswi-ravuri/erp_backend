@@ -13,15 +13,6 @@ import { BRANCHES } from "../config/constants.js";
 
 const NOT_DELETED = { is_deleted: { $ne: true } };
 
-/** Returns { branch: X } for everyone except super_admin, who can pass
- *  ?branch=X to drill into a specific branch (or omit it for all
- *  branches). Accounts Manager is deliberately NOT given cross-branch
- *  access here, regardless of MULTI_BRANCH_ROLES membership elsewhere in
- *  the app - confirmed as branch-scoped-only for analytics purposes.
- *  (Previously this checked MULTI_BRANCH_ROLES.includes(req.user.role),
- *  which would have let Accounts Manager pass ?branch= to view another
- *  branch's data if that role happens to be classified as multi-branch
- *  elsewhere in config/constants.js.) */
 function scopeFor(req) {
   if (req.user.role === "super_admin") {
     return req.query.branch ? { branch: req.query.branch } : {};
