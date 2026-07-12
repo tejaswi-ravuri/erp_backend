@@ -22,7 +22,12 @@ export const ACTIVE_ROLES = SUPER_ADMIN_ENABLED
   : ALL_ROLES.filter((r) => r !== ROLES.SUPER_ADMIN);
 
 // Roles whose data access spans ALL branches rather than being scoped to one.
-export const CROSS_BRANCH_ROLES = [ROLES.SUPER_ADMIN, ROLES.ACCOUNTS_MANAGER];
+export const MULTI_BRANCH_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN_OFFICER];
+export const SINGLE_BRANCH_ROLES = [
+  ROLES.TEACHER,
+  ROLES.ACCOUNTS_MANAGER,
+  ROLES.PRINCIPAL,
+];
 
 export const BRANCHES = [
   "Hyderabad",
@@ -45,6 +50,7 @@ export const ENTITY_NAMES = [
   "Admission",
   "Student",
   "Staff",
+  "Branch",
   "Attendance",
   "Marks",
   "Exam",

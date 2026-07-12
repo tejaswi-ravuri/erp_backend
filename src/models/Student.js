@@ -1,26 +1,76 @@
 import mongoose from "mongoose";
 import { withCommonFields } from "./_baseSchema.js";
+import { addressSchema } from "./_addressSchema.js";
 
 const studentSchema = new mongoose.Schema({
-  admission_no: { type: String, trim: true, index: true },
+  admission_no: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    index: true,
+  },
   full_name: { type: String, required: true, trim: true },
   dob: { type: Date },
   gender: { type: String, enum: ["Male", "Female", "Other"] },
-  blood_group: { type: String, enum: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"] },
-  class: { type: String, required: true, index: true },
-  section: { type: String },
+  blood_group: {
+    type: String,
+    enum: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"],
+  },
+
+  class: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Class",
+    required: true,
+    index: true,
+  },
+
   roll_no: { type: String },
   parent_name: { type: String },
   parent_phone: { type: String },
   parent_email: { type: String, lowercase: true, trim: true },
-  address: { type: String },
-  city: { type: String },
+  branch: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Branch",
+    required: true,
+    index: true,
+  },
+  address: { type: addressSchema, default: null },
   joining_date: { type: Date },
-  status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
+  status: {
+    type: String,
+    enum: [
+      "Active",
+      "Inactive",
+      "Graduated",
+      "Transferred Out",
+      "Dropped Out",
+      "On Leave",
+      "Alumni",
+    ],
+    default: "Active",
+  },
   photo_url: { type: String },
 });
 
 withCommonFields(studentSchema);
-studentSchema.index({ branch: 1, class: 1, section: 1 });
+studentSchema.index({ branch: 1, class: 1 });
+
+// Guard-rail: a student's class must belong to the student's own branch.
+studentSchema.pre("save", async function (next) {
+  if (!this.isModified("class")) return next();
+  const cls = await mongoose
+    .model("Class")
+    .findById(this.class)
+    .select("branch")
+    .lean();
+  if (!cls) return next(new Error("Assigned class does not exist."));
+  if (String(cls.branch) !== String(this.branch)) {
+    return next(
+      new Error("Student's class must belong to the student's own branch."),
+    );
+  }
+  next();
+});
 
 export default mongoose.model("Student", studentSchema);

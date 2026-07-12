@@ -3,11 +3,34 @@ import { withCommonFields } from "./_baseSchema.js";
 
 const studentFeeReportSchema = new mongoose.Schema({
   sno: { type: Number },
-  student_id: { type: mongoose.Schema.Types.ObjectId, ref: "Student", required: true, index: true },
+  // FIX: this field was missing entirely. Every controller function
+  // (listReports/createReport/updateReport/removeReport) filters or sets
+  // `branch` from req.user.branch, but since Mongoose is strict by default,
+  // that key was being silently stripped on save and every branch filter
+  // was matching against a field that didn't exist on any document -
+  // accounts managers would see zero records. Matches the pattern used on
+  // every other transactional model (Student, Attendance, Marks, etc).
+  branch: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Branch",
+    required: true,
+    index: true,
+  },
+  student_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Student",
+    required: true,
+    index: true,
+  },
   student_name: { type: String, required: true },
   father_name: { type: String, required: true },
   mob_number: { type: String, required: true },
-  class: { type: String, required: true, index: true },
+  class: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Class",
+    required: true,
+    index: true,
+  },
   student_type: { type: String, enum: ["Existing", "New"], required: true },
   old_fee: { type: Number },
   adm_gross_fee: { type: Number, required: true },

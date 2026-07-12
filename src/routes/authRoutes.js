@@ -22,13 +22,15 @@ const loginLimiter = rateLimit({
   limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many login attempts. Please try again in a few minutes." },
+  message: {
+    error: "Too many login attempts. Please try again in a few minutes.",
+  },
 });
 
 router.post("/login", loginLimiter, login);
 router.post("/refresh", refresh);
 
-router.use(requireAuth); // everything below requires a valid access token
+router.use(requireAuth);
 
 router.post("/logout", logout);
 router.get("/me", me);
@@ -38,6 +40,10 @@ router.put("/change-password", changePassword);
 router.post("/users", requireRole(ROLES.PRINCIPAL), createUser);
 router.get("/users", requireRole(ROLES.PRINCIPAL), listUsers);
 router.put("/users/:id", requireRole(ROLES.PRINCIPAL), updateUser);
-router.put("/users/:id/reset-password", requireRole(ROLES.PRINCIPAL), adminResetPassword);
+router.put(
+  "/users/:id/reset-password",
+  requireRole(ROLES.PRINCIPAL),
+  adminResetPassword,
+);
 
 export default router;

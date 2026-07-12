@@ -3,8 +3,18 @@ import { withCommonFields } from "./_baseSchema.js";
 
 const homeworkSchema = new mongoose.Schema({
   title: { type: String, required: true },
-  class: { type: String, required: true, index: true },
-  section: { type: String },
+  class: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Class",
+    required: true,
+    index: true,
+  },
+  branch: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Branch",
+    required: true,
+    index: true,
+  },
   subject: { type: String, required: true },
   description: { type: String },
   due_date: { type: Date, required: true },

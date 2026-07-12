@@ -8,6 +8,7 @@ import {
   incomeExpenditure,
   branchComparison,
   admissionsFunnel,
+  dashboardStats,
 } from "../controllers/analyticsController.js";
 import { ROLES } from "../config/constants.js";
 
@@ -24,7 +25,12 @@ router.get(
 );
 router.get(
   "/attendance-summary",
-  requireRole(ROLES.TEACHER, ROLES.PRINCIPAL, ROLES.ADMIN_OFFICER, ROLES.ACCOUNTS_MANAGER),
+  requireRole(
+    ROLES.TEACHER,
+    ROLES.PRINCIPAL,
+    ROLES.ADMIN_OFFICER,
+    ROLES.ACCOUNTS_MANAGER,
+  ),
   attendanceSummary,
 );
 router.get(
@@ -42,8 +48,17 @@ router.get(
   requireRole(ROLES.PRINCIPAL, ROLES.ADMIN_OFFICER, ROLES.ACCOUNTS_MANAGER),
   admissionsFunnel,
 );
+router.get(
+  "/dashboard-stats",
+  requireRole(ROLES.PRINCIPAL, ROLES.ADMIN_OFFICER, ROLES.ACCOUNTS_MANAGER),
+  dashboardStats,
+);
 
 // Cross-branch comparison is exactly the kind of view only Accounts Manager / Super Admin should have.
-router.get("/branch-comparison", requireRole(ROLES.ACCOUNTS_MANAGER), branchComparison);
+router.get(
+  "/branch-comparison",
+  requireRole(ROLES.ACCOUNTS_MANAGER),
+  branchComparison,
+);
 
 export default router;

@@ -1,6 +1,13 @@
 import { ROLES } from "../config/constants.js";
 
-const { SUPER_ADMIN, PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER, TEACHER, STUDENT } = ROLES;
+const {
+  SUPER_ADMIN,
+  PRINCIPAL,
+  ADMIN_OFFICER,
+  ACCOUNTS_MANAGER,
+  TEACHER,
+  STUDENT,
+} = ROLES;
 
 /**
  * permission shape per entity:
@@ -19,14 +26,26 @@ const { SUPER_ADMIN, PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER, TEACHER, STUDEN
  * the middleware, not listed here, so this file doesn't get cluttered.
  */
 export const PERMISSIONS = {
+  User: {
+    create: [PRINCIPAL, ADMIN_OFFICER],
+    read: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
+    update: [PRINCIPAL, ADMIN_OFFICER],
+    delete: [PRINCIPAL, ADMIN_OFFICER],
+  },
   Admission: {
     create: [PRINCIPAL, ADMIN_OFFICER],
     read: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
     update: [PRINCIPAL, ADMIN_OFFICER],
     delete: [PRINCIPAL],
   },
+  Class: {
+    create: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
+    read: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER, TEACHER],
+    update: [PRINCIPAL, ADMIN_OFFICER, TEACHER],
+    delete: [PRINCIPAL],
+  },
   Student: {
-    create: [PRINCIPAL, ADMIN_OFFICER],
+    create: [PRINCIPAL, TEACHER, ACCOUNTS_MANAGER],
     read: [PRINCIPAL, ADMIN_OFFICER, TEACHER, ACCOUNTS_MANAGER, STUDENT],
     update: [PRINCIPAL, ADMIN_OFFICER],
     delete: [PRINCIPAL],

@@ -1,30 +1,18 @@
-import { CROSS_BRANCH_ROLES, ROLES } from "../config/constants.js";
+import { MULTI_BRANCH_ROLES, ROLES } from "../config/constants.js";
 import { getPermissionRule } from "../rbac/permissions.js";
 import { ApiError } from "../utils/ApiError.js";
 
-/**
- * Builds the mongo filter that MUST be ANDed onto every read/update/delete
- * query for a given entity + user, on top of whatever filter the client sent.
- *
- * This is what makes branch isolation "strict" rather than a UI suggestion:
- * a Teacher in Hyderabad can send any filter they like in the query string,
- * but they will never get back a document whose branch != their own branch,
- * because this filter is applied server-side after their input is parsed,
- * and the client-supplied `branch` field is stripped/overridden, never trusted.
- */
-export function buildScopeFilter(entityName, user, { studentFieldName = "student_id", excludeDeleted = true } = {}) {
+export function buildScopeFilter(
+  entityName,
+  user,
+  { studentFieldName = "student_id", excludeDeleted = true } = {},
+) {
   const scope = {};
   const rule = getPermissionRule(entityName) || {};
-
-  // Soft-delete exclusion is applied explicitly here (rather than relying on
-  // schema query middleware) because findOneAndUpdate/updateMany do NOT run
-  // the same 'find'/'findOne' pre-hooks - being explicit avoids a footgun.
   if (excludeDeleted) {
     scope.is_deleted = { $ne: true };
   }
-
-  // 1. Branch isolation - cross-branch roles (accounts_manager, super_admin) skip this.
-  if (!CROSS_BRANCH_ROLES.includes(user.role)) {
+  if (!MULTI_BRANCH_ROLES.includes(user.role)) {
     scope.branch = user.branch;
   }
 
@@ -42,10 +30,7 @@ export function buildScopeFilter(entityName, user, { studentFieldName = "student
 
   // 3. Owner scoping (e.g. Teacher on Appointment can only touch their own).
   if (rule.ownerScope && rule.ownerScope.includes(user.role)) {
-    scope.$or = [
-      { created_by: user._id },
-      { with_whom_user_id: user._id },
-    ];
+    scope.$or = [{ created_by: user._id }, { with_whom_user_id: user._id }];
   }
 
   return scope;
@@ -67,7 +52,7 @@ export function sanitizeAndScopeBody(entityName, user, body = {}) {
   delete clean.created_date;
   delete clean.updated_date;
 
-  if (CROSS_BRANCH_ROLES.includes(user.role)) {
+  if (MULTI_BRANCH_ROLES.includes(user.role)) {
     // Cross-branch roles may specify a branch explicitly when creating records
     // (e.g. Accounts Manager entering a correction for a specific branch).
     if (!clean.branch) {
