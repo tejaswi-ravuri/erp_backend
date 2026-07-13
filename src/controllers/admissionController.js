@@ -9,6 +9,7 @@ import {
   generateRollNo,
 } from "../utils/admissionNumbering.js";
 import { isValidAadhaar } from "../utils/verhoeff.js";
+import AdmissionEnquiry from "../models/AdmissionEnquiry.js";
 
 const ENTITY = "Admission";
 
@@ -318,6 +319,258 @@ export const convert = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: err.message || "Failed to convert to student.",
+    });
+  }
+};
+
+export const addApplicationEnquiry = async (req, res) => {
+  try {
+    const requiredFields = [
+      "id",
+      "studentName",
+      "branch",
+      "mobile",
+      "academicYear",
+      "status",
+      "date",
+      "fatherName",
+      "className",
+      "board",
+      "emailId",
+      "addressLine1",
+      "landmark",
+      "city",
+      "district",
+      "state",
+      "previousSchool",
+      "enquiryType",
+      "proName",
+    ];
+
+    for (const field of requiredFields) {
+      if (!req.body[field]) {
+        return res.status(400).json({
+          success: false,
+          message: `Missing required field: ${field}`,
+        });
+      }
+    }
+
+    req.body.applicationid = req.body.id;
+    delete req.body.id;
+
+    const existingEnquiry = await AdmissionEnquiry.findOne({
+      applicationid: req.body.applicationid,
+    });
+
+    if (existingEnquiry) {
+      Object.assign(existingEnquiry, req.body);
+      await existingEnquiry.save();
+      return res.status(200).json({
+        success: true,
+        message: "Application enquiry updated successfully.",
+        data: existingEnquiry,
+      });
+    }
+
+    const enquiryData = {
+      ...req.body,
+      added_by: req.user.id,
+    };
+
+    const enquiry = await AdmissionEnquiry.create(enquiryData);
+
+    return res.status(201).json({ success: true, data: enquiry });
+  } catch (err) {
+    console.error("admissions.addApplicationEnquiry error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add application enquiry.",
+    });
+  }
+};
+
+export const deleteApplicationEnquiry = async (req, res) => {
+  try {
+    const enquiryId = req.params.id;
+
+    const enquiry = await AdmissionEnquiry.findById(enquiryId);
+    if (!enquiry) {
+      return res.status(404).json({
+        success: false,
+        message: "Application enquiry not found.",
+      });
+    }
+
+    await enquiry.deleteOne();
+
+    return res.status(200).json({
+      success: true,
+      message: "Application enquiry deleted successfully.",
+      data: { _id: enquiryId },
+    });
+  } catch (err) {
+    console.error("admissions.deleteApplicationEnquiry error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete application enquiry.",
+    });
+  }
+};
+
+export const getApplicationEnquiryById = async (req, res) => {
+  try {
+    const enquiry = await AdmissionEnquiry.findById(req.params.id);
+    if (!enquiry) {
+      return res.status(404).json({
+        success: false,
+        message: "Application enquiry not found.",
+      });
+    }
+
+    if (req.user.branch && enquiry.branch !== req.user.branch) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to view this enquiry.",
+      });
+    }
+
+    return res.status(200).json({ success: true, data: enquiry });
+  } catch (err) {
+    console.error("admissions.getApplicationEnquiryById error:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch application enquiry.",
+    });
+  }
+};
+
+export const updateApplicationEnquiry = async (req, res) => {
+  try {
+    const enquiryId = req.params.id;
+
+    const enquiry = await AdmissionEnquiry.findById(enquiryId);
+    if (!enquiry) {
+      return res.status(404).json({
+        success: false,
+        message: "Application enquiry not found.",
+      });
+    }
+
+    if (req.user.branch && enquiry.branch !== req.user.branch) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to update this enquiry.",
+      });
+    }
+
+    const requiredFields = [
+      "studentName",
+      "branch",
+      "mobile",
+      "academicYear",
+      "status",
+      "date",
+      "fatherName",
+      "className",
+      "board",
+      "emailId",
+      "addressLine1",
+      "landmark",
+      "city",
+      "district",
+      "state",
+      "previousSchool",
+      "enquiryType",
+      "proName",
+    ];
+
+    for (const field of requiredFields) {
+      if (!req.body[field]) {
+        return res.status(400).json({
+          success: false,
+          message: `Missing required field: ${field}`,
+        });
+      }
+    }
+
+    Object.assign(enquiry, req.body);
+    await enquiry.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Application enquiry updated successfully.",
+      data: enquiry,
+    });
+  } catch (err) {
+    console.error("admissions.updateApplicationEnquiry error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update application enquiry.",
+    });
+  }
+};
+
+export const listApplicationEnquiries = async (req, res) => {
+  try {
+    const filter = {};
+
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+    if (req.query.academicYear) {
+      filter.academicYear = req.query.academicYear;
+    }
+    if (req.query.className) {
+      filter.className = req.query.className;
+    }
+    if (req.query.branch) {
+      filter.branch = req.query.branch;
+    }
+
+    let query = AdmissionEnquiry.find(filter);
+
+    if (req.query.search) {
+      const searchRegex = new RegExp(req.query.search, "i");
+      query = query.or([
+        { studentName: searchRegex },
+        { applicationid: searchRegex },
+        { mobile: searchRegex },
+        { fatherName: searchRegex },
+      ]);
+    }
+
+    query = query.sort({ createdAt: -1, date: -1 });
+
+    if (req.query.page && req.query.limit) {
+      const page = parseInt(req.query.page);
+      const limit = parseInt(req.query.limit);
+      const skip = (page - 1) * limit;
+      query = query.skip(skip).limit(limit);
+    } else if (req.query.limit) {
+      query = query.limit(parseInt(req.query.limit));
+    }
+
+    const enquiries = await query.exec();
+    const total = await AdmissionEnquiry.countDocuments(filter);
+
+    return res.status(200).json({
+      success: true,
+      data: enquiries,
+      pagination: {
+        total,
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || enquiries.length,
+        pages: Math.ceil(
+          total / (parseInt(req.query.limit) || enquiries.length || 1),
+        ),
+      },
+    });
+  } catch (err) {
+    console.error("admissions.listApplicationEnquiries error:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch application enquiries.",
     });
   }
 };
