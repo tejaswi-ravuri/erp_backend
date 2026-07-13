@@ -61,7 +61,15 @@ const userSchema = new mongoose.Schema(
       },
     },
 
-    phone: { type: String, trim: true },
+    phone: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: (v) => !v || /^\d{10}$/.test(v),
+        message: (props) =>
+          `"${props.value}" is not a valid 10-digit phone number.`,
+      },
+    },
     address: { type: addressSchema, default: null },
 
     // Staff-profile fields - live directly on User since there's no separate Staff collection.
