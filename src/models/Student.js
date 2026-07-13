@@ -27,7 +27,15 @@ const studentSchema = new mongoose.Schema({
 
   roll_no: { type: String },
   parent_name: { type: String },
-  parent_phone: { type: String },
+  parent_phone: {
+    type: String,
+    trim: true,
+    validate: {
+      validator: (v) => !v || /^\d{10}$/.test(v),
+      message: (props) =>
+        `"${props.value}" is not a valid 10-digit phone number.`,
+    },
+  },
   parent_email: { type: String, lowercase: true, trim: true },
   branch: {
     type: mongoose.Schema.Types.ObjectId,

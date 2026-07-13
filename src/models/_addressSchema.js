@@ -1,5 +1,6 @@
 // models/_addressSchema.js
 import mongoose from "mongoose";
+import { STATES } from "../config/constants.js";
 
 // Reusable embedded subdocument — not its own collection/model, just a shape
 // other schemas plug in wherever they need a validated address.
@@ -9,7 +10,7 @@ export const addressSchema = new mongoose.Schema(
     line2: { type: String, trim: true },
     city: { type: String, required: true, trim: true },
     district: { type: String, trim: true },
-    state: { type: String, required: true, trim: true },
+    state: { type: String, required: true, trim: true, enum: STATES },
     pincode: {
       type: String,
       required: true,

@@ -45,10 +45,10 @@ export const PERMISSIONS = {
     delete: [PRINCIPAL],
   },
   Student: {
-    create: [PRINCIPAL, TEACHER, ACCOUNTS_MANAGER],
+    create: [ACCOUNTS_MANAGER],
     read: [PRINCIPAL, ADMIN_OFFICER, TEACHER, ACCOUNTS_MANAGER, STUDENT],
-    update: [PRINCIPAL, ADMIN_OFFICER],
-    delete: [PRINCIPAL],
+    update: [ACCOUNTS_MANAGER],
+    delete: [ACCOUNTS_MANAGER],
     studentOwnOnly: true,
   },
   Staff: {
