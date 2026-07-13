@@ -11,7 +11,9 @@ incomeRoutes.use(requireAuth);
 incomeRoutes.get("/", incomeController.list);
 incomeRoutes.post("/", incomeController.create);
 incomeRoutes.put("/:id", incomeController.update);
-incomeRoutes.delete("/:id", incomeController.remove);
+incomeRoutes.post("/:id/request-delete", incomeController.requestDelete);
+incomeRoutes.post("/:id/approve-delete", incomeController.approveDelete);
+incomeRoutes.post("/:id/reject-delete", incomeController.rejectDelete);
 
 export default incomeRoutes;
 
