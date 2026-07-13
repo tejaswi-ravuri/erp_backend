@@ -29,9 +29,56 @@ const REPORT_ENTITY = "StudentFeeReport";
 
 const ROW_TO_FEE_TYPE = {
   school_fee: "School Fee",
+  // "School Fee" and "Term Fee" are the same real-world fee and share one
+  // report bucket (gross_term_fee/paid_term_fee/balance_term_fee) - both
+  // row keys below increment the same balance in collectPayment(). The
+  // "Term Fee" label is kept only so payments already tagged that way
+  // stay valid; the Fee Payments form no longer has a separate input for it.
+  term_fee: "Term Fee",
   admission_fee: "Admission Fee",
   previous_due: "Previous Due",
+  application_fee: "Application Fee",
+  transport_fee: "Transport Fee",
+  registration_fee: "Registration Fee",
 };
+
+// Which has_*_fee flag and gross/concession/paid fields belong to each
+// bucket - used to zero out a bucket's numbers whenever it's turned off,
+// so stale data from a previously-enabled bucket never lingers.
+const FEE_BUCKETS = {
+  admission: {
+    flag: "has_admission_fee",
+    fields: ["adm_gross_fee", "adm_concession", "paid_adm_fee"],
+  },
+  term: {
+    flag: "has_term_fee",
+    fields: ["gross_term_fee", "term_concession", "paid_term_fee"],
+  },
+  transport: {
+    flag: "has_transport_fee",
+    fields: ["transport_gross_fee", "transport_concession", "paid_transport_fee"],
+  },
+  application: {
+    flag: "has_application_fee",
+    fields: ["application_gross_fee", "application_concession", "paid_application_fee"],
+  },
+  registration: {
+    flag: "has_registration_fee",
+    fields: [
+      "registration_gross_fee",
+      "registration_concession",
+      "paid_registration_fee",
+    ],
+  },
+};
+
+function sanitizeFeeBuckets(target) {
+  for (const { flag, fields } of Object.values(FEE_BUCKETS)) {
+    if (!target[flag]) {
+      for (const field of fields) target[field] = 0;
+    }
+  }
+}
 
 const forbidden = (res, entity, action) =>
   res.status(403).json({
@@ -228,12 +275,20 @@ export const collectPayment = async (req, res) => {
       });
       payments.push(payment);
 
-      if (row.key === "school_fee") {
+      if (row.key === "school_fee" || row.key === "term_fee") {
         report.paid_term_fee = (report.paid_term_fee || 0) + amount;
       } else if (row.key === "admission_fee") {
         report.paid_adm_fee = (report.paid_adm_fee || 0) + amount;
       } else if (row.key === "previous_due") {
         report.old_fee = Math.max(0, (report.old_fee || 0) - amount);
+      } else if (row.key === "transport_fee") {
+        report.paid_transport_fee = (report.paid_transport_fee || 0) + amount;
+      } else if (row.key === "application_fee") {
+        report.paid_application_fee =
+          (report.paid_application_fee || 0) + amount;
+      } else if (row.key === "registration_fee") {
+        report.paid_registration_fee =
+          (report.paid_registration_fee || 0) + amount;
       }
     }
 
@@ -312,7 +367,8 @@ export const listReports = async (req, res) => {
     if (!isAllowed(REPORT_ENTITY, "read", req.user.role))
       return forbidden(res, REPORT_ENTITY, "view");
 
-    const { student_id, class: cls, status, sort, limit } = req.query;
+    const { student_id, class: cls, status, sort, limit, has_old_fee } =
+      req.query;
     const filter = {};
     // FIX: was unconditional (`filter.branch = req.user.branch`), unlike
     // every other list/lookup in this file - aligned to the same
@@ -324,6 +380,9 @@ export const listReports = async (req, res) => {
     if (student_id) filter.student_id = student_id;
     if (cls) filter.class = cls;
     if (status) filter.status = status;
+    if (has_old_fee === "true") filter.old_fee = { $gt: 0 };
+    else if (has_old_fee === "false")
+      filter.$or = [{ old_fee: { $lte: 0 } }, { old_fee: { $exists: false } }];
 
     let query = StudentFeeReport.find(filter).populate(
       "student_id",
@@ -333,7 +392,19 @@ export const listReports = async (req, res) => {
     if (limit) query = query.limit(Number(limit));
 
     const records = await query.lean();
-    return res.json({ success: true, data: records });
+    // .lean() skips Mongoose's own default-application on hydration, so
+    // reports created before the has_*_fee flags existed come back with
+    // those keys simply absent - backfill them here (Admission/Term always
+    // applied historically; Transport/Application/Registration never did).
+    const normalized = records.map((r) => ({
+      ...r,
+      has_admission_fee: r.has_admission_fee ?? true,
+      has_term_fee: r.has_term_fee ?? true,
+      has_transport_fee: r.has_transport_fee ?? false,
+      has_application_fee: r.has_application_fee ?? false,
+      has_registration_fee: r.has_registration_fee ?? false,
+    }));
+    return res.json({ success: true, data: normalized });
   } catch (err) {
     console.error("fee.listReports error:", err.message);
     return res
@@ -356,7 +427,9 @@ export const createReport = async (req, res) => {
         .json({ success: false, message: "A branch is required." });
     }
 
-    const record = await StudentFeeReport.create({ ...req.body, branch });
+    const payload = { ...req.body, branch };
+    sanitizeFeeBuckets(payload);
+    const record = await StudentFeeReport.create(payload);
     return res.status(201).json({ success: true, data: record });
   } catch (err) {
     console.error("fee.createReport error:", err.message);
@@ -386,6 +459,7 @@ export const updateReport = async (req, res) => {
     if (req.user.role !== "super_admin") delete updates.branch;
 
     Object.assign(existing, updates);
+    sanitizeFeeBuckets(existing);
     await existing.save(); // triggers pre-validate recompute of net/balance fields
     return res.json({ success: true, data: existing });
   } catch (err) {
