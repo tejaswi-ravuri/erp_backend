@@ -31,6 +31,7 @@ const applicationSchema = new mongoose.Schema(
     },
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     branch: { type: mongoose.Schema.Types.ObjectId, ref: "Branch" },
+    isAdmitted: { type: Boolean, required: true, default: false },
   },
   { timestamps: true },
 );
