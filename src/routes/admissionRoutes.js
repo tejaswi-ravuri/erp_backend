@@ -30,4 +30,14 @@ admissionRouter.delete(
   admissionController.deleteApplicationEnquiry,
 );
 
+// Application routes
+admissionRouter.post("/addApplication", admissionController.addApplication);
+admissionRouter.get("/applications", admissionController.listApplications);
+admissionRouter.get("/application/:id", admissionController.getApplicationById);
+admissionRouter.put("/application/:id", admissionController.updateApplication);
+admissionRouter.delete(
+  "/application/:id",
+  admissionController.deleteApplication,
+);
+
 export default admissionRouter;
