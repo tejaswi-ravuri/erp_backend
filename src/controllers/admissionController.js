@@ -85,7 +85,7 @@ export const create = async (req, res) => {
     const { saleOfApplicationId } = req.body;
     if (saleOfApplicationId) {
       await Application.updateOne(
-        { _id: ObjectId(saleOfApplicationId) },
+        { _id: saleOfApplicationId },
         { $set: { isAdmitted: true } },
       );
     }

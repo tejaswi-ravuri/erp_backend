@@ -37,6 +37,32 @@ export function buildScopeFilter(
 }
 
 /**
+ * Resolves an optional `?branch=` query param for read/list endpoints.
+ * Single-branch roles are always pinned to their own branch, ignoring any
+ * query param. Multi-branch roles are limited to their assigned
+ * `user.branches` (super_admin is unrestricted): passing no branch means
+ * "everything I'm assigned to", passing one narrows to it - but only if
+ * it's actually one of theirs, otherwise `allowed` comes back false so the
+ * caller can 403 rather than silently leaking another branch's records.
+ */
+export function resolveBranchQueryFilter(user, queryBranch) {
+  if (user.branch) return { allowed: true, filter: { branch: user.branch } };
+
+  if (user.role === ROLES.SUPER_ADMIN) {
+    return { allowed: true, filter: queryBranch ? { branch: queryBranch } : {} };
+  }
+
+  const assigned = (user.branches || []).map((b) => b.toString());
+  if (!queryBranch) {
+    return { allowed: true, filter: { branch: { $in: assigned } } };
+  }
+  if (!assigned.includes(String(queryBranch))) {
+    return { allowed: false, filter: {} };
+  }
+  return { allowed: true, filter: { branch: queryBranch } };
+}
+
+/**
  * Strips fields a client should never be able to set directly, and forces
  * branch on create to the user's own branch (or the explicitly chosen
  * branch, only for cross-branch roles).

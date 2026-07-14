@@ -23,6 +23,7 @@ import Student from "../models/Student.js";
 import StudentFeeReport from "../models/StudentFeeReport.js";
 import { isAllowed } from "../rbac/permissions.js";
 import { generateReceiptNo } from "../utils/admissionNumbering.js";
+import { resolveBranchQueryFilter } from "../middleware/branchScope.js";
 
 const PAYMENT_ENTITY = "FeePayment";
 const REPORT_ENTITY = "StudentFeeReport";
@@ -91,18 +92,30 @@ const forbidden = (res, entity, action) =>
 // ---------------------------------------------------------------------
 
 // GET /api/fee-payments
-// params (all optional): student_id, academic_year, status, sort, limit
+// params (all optional): student_id, academic_year, status, sort, limit, from, to, branch
+// `from`/`to` filter on payment_date (inclusive); `branch` only has any
+// effect for multi-branch roles - see resolveBranchQueryFilter.
 export const listPayments = async (req, res) => {
   try {
     if (!isAllowed(PAYMENT_ENTITY, "read", req.user.role))
       return forbidden(res, PAYMENT_ENTITY, "view");
 
-    const { student_id, academic_year, status, sort, limit } = req.query;
-    const filter = {};
-    if (req.user.branch) filter.branch = req.user.branch;
+    const { student_id, academic_year, status, sort, limit, from, to, branch } =
+      req.query;
+    const { allowed, filter } = resolveBranchQueryFilter(req.user, branch);
+    if (!allowed) {
+      return res
+        .status(403)
+        .json({ success: false, message: "You do not have access to that branch." });
+    }
     if (student_id) filter.student_id = student_id;
     if (academic_year) filter.academic_year = academic_year;
     if (status) filter.status = status;
+    if (from || to) {
+      filter.payment_date = {};
+      if (from) filter.payment_date.$gte = new Date(from);
+      if (to) filter.payment_date.$lte = new Date(to);
+    }
 
     let query = FeePayment.find(filter);
     if (sort) query = query.sort(sort);

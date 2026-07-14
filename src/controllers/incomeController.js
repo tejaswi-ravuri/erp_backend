@@ -11,6 +11,7 @@
 
 import Income from "../models/Income.js";
 import { isAllowed } from "../rbac/permissions.js";
+import { resolveBranchQueryFilter } from "../middleware/branchScope.js";
 
 const ENTITY = "Income";
 
@@ -47,18 +48,25 @@ function pickPaymentFields(method, body) {
 }
 
 // GET /api/income
-// params (all optional): category, payment_method, sort, from, to, page, limit
+// params (all optional): category, payment_method, sort, from, to, page, limit, branch
 // page/limit turn on pagination - when page is present the response also
 // carries a `meta` block ({ total, page, limit, totalPages }); when it's
-// omitted (existing callers), the endpoint behaves as before.
+// omitted (existing callers), the endpoint behaves as before. `branch` only
+// has any effect for multi-branch roles (single-branch roles are always
+// pinned to their own branch) - see resolveBranchQueryFilter.
 export const list = async (req, res) => {
   try {
     if (!isAllowed(ENTITY, "read", req.user.role))
       return forbidden(res, "view");
 
-    const { category, payment_method, sort, limit, page, from, to } = req.query;
-    const filter = {};
-    if (req.user.branch) filter.branch = req.user.branch;
+    const { category, payment_method, sort, limit, page, from, to, branch } =
+      req.query;
+    const { allowed, filter } = resolveBranchQueryFilter(req.user, branch);
+    if (!allowed) {
+      return res
+        .status(403)
+        .json({ success: false, message: "You do not have access to that branch." });
+    }
     if (category) filter.category = category;
     if (payment_method) filter.payment_method = payment_method;
     if (from || to) {

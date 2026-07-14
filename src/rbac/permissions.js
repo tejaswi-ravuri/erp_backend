@@ -33,10 +33,10 @@ export const PERMISSIONS = {
     delete: [PRINCIPAL, ADMIN_OFFICER],
   },
   Admission: {
-    create: [PRINCIPAL, ADMIN_OFFICER],
+    create: [ACCOUNTS_MANAGER, ADMIN_OFFICER],
     read: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
-    update: [PRINCIPAL, ADMIN_OFFICER],
-    delete: [PRINCIPAL],
+    update: [ACCOUNTS_MANAGER, ADMIN_OFFICER],
+    delete: [ACCOUNTS_MANAGER],
   },
   Class: {
     create: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
