@@ -82,6 +82,14 @@ export const create = async (req, res) => {
       added_by: req.user.id,
     });
 
+    const { saleOfApplicationId } = req.body;
+    if (saleOfApplicationId) {
+      await Application.updateOne(
+        { _id: ObjectId(saleOfApplicationId) },
+        { $set: { isAdmitted: true } },
+      );
+    }
+
     return res.status(201).json({ success: true, data: doc });
   } catch (err) {
     if (err.code === 11000) {
@@ -613,6 +621,7 @@ export const addApplication = async (req, res) => {
     }
     const applicationData = {
       ...req.body,
+      isAdmitted: false,
       addedBy: req.user.id,
       branch: req.user.branch || req.body.branch, // Use user's branch if available, otherwise use the provided branch
     };

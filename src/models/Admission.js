@@ -164,6 +164,11 @@ const admissionSchema = new mongoose.Schema({
 
   declaration_accepted: { type: Boolean, default: false },
   declaration_date: { type: String },
+  saleOfApplicationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Application",
+    default: null,
+  },
 
   // student_signature / parent_signature / principal_signature removed
   // entirely, per request.
