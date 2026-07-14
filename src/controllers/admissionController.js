@@ -10,6 +10,7 @@ import {
 } from "../utils/admissionNumbering.js";
 import { isValidAadhaar } from "../utils/verhoeff.js";
 import AdmissionEnquiry from "../models/AdmissionEnquiry.js";
+import Application from "../models/ApplicationSchema.js";
 
 const ENTITY = "Admission";
 
@@ -571,6 +572,234 @@ export const listApplicationEnquiries = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch application enquiries.",
+    });
+  }
+};
+
+// Application routes
+export const addApplication = async (req, res) => {
+  try {
+    const requiredFields = [
+      "studentName",
+      "fatherName",
+      "className",
+      "academicYear",
+      "mobileNo",
+      "applicationNo",
+      "commAddressLine1",
+      "commLandmark",
+      "commCity",
+      "commDistrict",
+      "commState",
+      "permenantAddressLine1",
+      "permenantLandmark",
+      "permenantCity",
+      "permenantDistrict",
+      "permenantState",
+      "proName",
+      "selectMV",
+      "mvNo",
+      "bank",
+      "previousSchool",
+    ];
+
+    for (const field of requiredFields) {
+      if (!req.body[field]) {
+        return res.status(400).json({
+          success: false,
+          message: `Missing required field: ${field}`,
+        });
+      }
+    }
+    const applicationData = {
+      ...req.body,
+      addedBy: req.user.id,
+      branch: req.user.branch || req.body.branch, // Use user's branch if available, otherwise use the provided branch
+    };
+
+    const application = await Application.create(applicationData);
+
+    return res.status(201).json({ success: true, data: application });
+  } catch (err) {
+    console.log("admissions.addApplication error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add application.",
+    });
+  }
+};
+
+export const listApplications = async (req, res) => {
+  try {
+    const filter = {};
+
+    if (req.body.status) {
+      filter.status = req.body.status;
+    }
+
+    if (req.body.academicYear) {
+      filter.academicYear = req.body.academicYear;
+    }
+
+    if (req.body.className) {
+      filter.className = req.body.className;
+    }
+
+    if (req.body.branch) {
+      filter.branch = req.body.branch;
+    }
+
+    let query = Application.find(filter);
+
+    if (req.body.search) {
+      const searchRegex = new RegExp(req.body.search, "i");
+      query = query.or([
+        { studentName: searchRegex },
+        { applicationNo: searchRegex },
+        { mobileNo: searchRegex },
+        { fatherName: searchRegex },
+      ]);
+    }
+
+    query = query.sort({ createdAt: -1, date: -1 });
+
+    if (req.body.page && req.body.limit) {
+      const page = parseInt(req.body.page);
+      const limit = parseInt(req.body.limit);
+      const skip = (page - 1) * limit;
+      query = query.skip(skip).limit(limit);
+    } else if (req.body.limit) {
+      query = query.limit(parseInt(req.body.limit));
+    }
+
+    const applications = await query.exec();
+    const total = await Application.countDocuments(filter);
+
+    return res.status(200).json({
+      success: true,
+      data: applications,
+      pagination: {
+        total,
+        page: parseInt(req.body.page) || 1,
+        limit: parseInt(req.body.limit) || applications.length,
+        pages: Math.ceil(
+          total / (parseInt(req.body.limit) || applications.length || 1),
+        ),
+      },
+    });
+  } catch (err) {
+    console.error("admissions.listApplications error:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch applications.",
+    });
+  }
+};
+
+export const getApplicationById = async (req, res) => {
+  try {
+    const application = await Application.findById(req.params.id);
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        message: "Application not found.",
+      });
+    }
+
+    if (
+      req.user.branch &&
+      String(application.branch) !== String(req.user.branch)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to view this application.",
+      });
+    }
+
+    return res.status(200).json({ success: true, data: application });
+  } catch (err) {
+    console.error("admissions.getApplicationById error:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch application.",
+    });
+  }
+};
+
+export const updateApplication = async (req, res) => {
+  try {
+    const applicationId = req.params.id;
+
+    const application = await Application.findById(applicationId);
+
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        message: "Application not found.",
+      });
+    }
+
+    if (
+      req.user.branch &&
+      String(application.branch) !== String(req.user.branch)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to update this application.",
+      });
+    }
+
+    Object.assign(application, req.body);
+    await application.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Application updated successfully.",
+      data: application,
+    });
+  } catch (err) {
+    console.error("admissions.updateApplication error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update application.",
+    });
+  }
+};
+
+export const deleteApplication = async (req, res) => {
+  try {
+    const applicationId = req.params.id;
+
+    const application = await Application.findById(applicationId);
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        message: "Application not found.",
+      });
+    }
+
+    if (
+      req.user.branch &&
+      String(application.branch) !== String(req.user.branch)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to delete this application.",
+      });
+    }
+
+    await application.deleteOne();
+
+    return res.status(200).json({
+      success: true,
+      message: "Application deleted successfully.",
+      data: { _id: applicationId },
+    });
+  } catch (err) {
+    console.error("admissions.deleteApplication error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete application.",
     });
   }
 };
