@@ -75,7 +75,9 @@ export const list = async (req, res) => {
       if (to) filter.date.$lte = new Date(to);
     }
 
-    let query = Income.find(filter).populate("delete_requested_by", "full_name");
+    let query = Income.find(filter)
+      .populate("branch", "name")
+      .populate("delete_requested_by", "full_name");
     if (sort) query = query.sort(sort);
 
     let meta;
