@@ -1,5 +1,5 @@
 import User from "../models/User.js";
-import { ROLES } from "../config/constants.js";
+import { ROLES, SINGLE_BRANCH_ROLES } from "../config/constants.js";
 import { isAllowed } from "../rbac/permissions.js";
 import { resolveBranchQueryFilter } from "../middleware/branchScope.js";
 
@@ -10,6 +10,17 @@ const forbidden = (res, action) =>
     success: false,
     message: `You do not have permission to ${action} users.`,
   });
+
+// Which roles a creator may assign to a brand-new staff account. Admin
+// Officer manages branch-level leadership across the org (Principal,
+// Accounts Manager); Accounts Manager only ever adds Teachers into their
+// own branch. Principal and super_admin are intentionally left out of
+// this map - their existing (broader) ability to create users is
+// unchanged, since only these two roles' scopes were narrowed.
+const ASSIGNABLE_ROLES_ON_CREATE = {
+  [ROLES.ADMIN_OFFICER]: [ROLES.PRINCIPAL, ROLES.ACCOUNTS_MANAGER],
+  [ROLES.ACCOUNTS_MANAGER]: [ROLES.TEACHER],
+};
 
 // GET /api/users
 export const list = async (req, res) => {
@@ -72,11 +83,29 @@ export const create = async (req, res) => {
       });
     }
 
+    const assignableRoles = ASSIGNABLE_ROLES_ON_CREATE[req.user.role];
+    if (assignableRoles && !assignableRoles.includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message: `Your role can only add: ${assignableRoles
+          .map((r) => r.replace("_", " "))
+          .join(", ")}.`,
+      });
+    }
+
+    const branch = req.body.branch || req.user.branch;
+    if (SINGLE_BRANCH_ROLES.includes(role) && !branch) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select a branch for this role.",
+      });
+    }
+
     // User.create() runs the schema's own pre-save hook, which hashes
     // the password automatically - never hash it again here.
     const doc = await User.create({
       ...req.body,
-      branch: req.body.branch || req.user.branch,
+      branch,
     });
 
     return res.status(201).json({ success: true, data: doc.toSafeJSON() });
