@@ -43,6 +43,18 @@ const ROW_TO_FEE_TYPE = {
   registration_fee: "Registration Fee",
 };
 
+// Which StudentFeeReport field caps each row's amount in collectPayment() -
+// "previous_due" is handled separately (it caps against `old_fee`, a flat
+// number, not a balance_*_fee bucket field).
+const ROW_TO_BALANCE_FIELD = {
+  school_fee: "balance_term_fee",
+  term_fee: "balance_term_fee",
+  admission_fee: "balance_adm_fee",
+  application_fee: "balance_application_fee",
+  transport_fee: "balance_transport_fee",
+  registration_fee: "balance_registration_fee",
+};
+
 // Which has_*_fee flag and gross/concession/paid fields belong to each
 // bucket - used to zero out a bucket's numbers whenever it's turned off,
 // so stale data from a previously-enabled bucket never lingers.
@@ -79,6 +91,21 @@ function sanitizeFeeBuckets(target) {
       for (const field of fields) target[field] = 0;
     }
   }
+}
+
+// paid_*_fee only ever moves through collectPayment() - createReport/
+// updateReport must never let a client set it directly, or the number
+// drifts from the actual FeePayment history with no receipt behind it.
+const PAID_FIELDS = [
+  "paid_adm_fee",
+  "paid_term_fee",
+  "paid_transport_fee",
+  "paid_application_fee",
+  "paid_registration_fee",
+];
+
+function stripPaidFields(body) {
+  for (const field of PAID_FIELDS) delete body[field];
 }
 
 const forbidden = (res, entity, action) =>
@@ -260,6 +287,37 @@ export const collectPayment = async (req, res) => {
       });
     }
 
+    // Cap every row at the report's actual remaining balance for that
+    // bucket, before creating any FeePayment docs - a row can't collect
+    // more than is actually owed. Tracked as a running "remaining" total
+    // per bucket in case more than one row ever targets the same bucket
+    // in a single call.
+    const remaining = {};
+    for (const row of rows) {
+      const amount = Number(row.amount);
+      if (row.key === "previous_due") {
+        if (remaining.old_fee === undefined) remaining.old_fee = report.old_fee || 0;
+        if (amount > remaining.old_fee) {
+          return res.status(400).json({
+            success: false,
+            message: `Previous Due amount (₹${amount}) exceeds the outstanding balance (₹${remaining.old_fee}).`,
+          });
+        }
+        remaining.old_fee -= amount;
+        continue;
+      }
+      const balanceField = ROW_TO_BALANCE_FIELD[row.key];
+      if (remaining[balanceField] === undefined)
+        remaining[balanceField] = report[balanceField] || 0;
+      if (amount > remaining[balanceField]) {
+        return res.status(400).json({
+          success: false,
+          message: `${ROW_TO_FEE_TYPE[row.key]} amount (₹${amount}) exceeds the outstanding balance (₹${remaining[balanceField]}).`,
+        });
+      }
+      remaining[balanceField] -= amount;
+    }
+
     const receipt_no = req.body.receipt_no || (await generateReceiptNo(branch));
 
     const sharedFields = {
@@ -380,15 +438,14 @@ export const listReports = async (req, res) => {
     if (!isAllowed(REPORT_ENTITY, "read", req.user.role))
       return forbidden(res, REPORT_ENTITY, "view");
 
-    const { student_id, class: cls, status, sort, limit, has_old_fee } =
+    const { student_id, class: cls, status, sort, limit, has_old_fee, branch } =
       req.query;
-    const filter = {};
-    // FIX: was unconditional (`filter.branch = req.user.branch`), unlike
-    // every other list/lookup in this file - aligned to the same
-    // `if (req.user.branch)` pattern used everywhere else, so a
-    // multi-branch role without a fixed req.user.branch doesn't silently
-    // filter on `branch: undefined`.
-    if (req.user.branch) filter.branch = req.user.branch;
+    const { allowed, filter } = resolveBranchQueryFilter(req.user, branch);
+    if (!allowed) {
+      return res
+        .status(403)
+        .json({ success: false, message: "You do not have access to that branch." });
+    }
 
     if (student_id) filter.student_id = student_id;
     if (cls) filter.class = cls;
@@ -441,6 +498,7 @@ export const createReport = async (req, res) => {
     }
 
     const payload = { ...req.body, branch };
+    stripPaidFields(payload);
     sanitizeFeeBuckets(payload);
     const record = await StudentFeeReport.create(payload);
     return res.status(201).json({ success: true, data: record });
@@ -470,6 +528,7 @@ export const updateReport = async (req, res) => {
 
     const updates = { ...req.body };
     if (req.user.role !== "super_admin") delete updates.branch;
+    stripPaidFields(updates);
 
     Object.assign(existing, updates);
     sanitizeFeeBuckets(existing);

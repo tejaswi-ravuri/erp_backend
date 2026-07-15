@@ -76,6 +76,7 @@ export const list = async (req, res) => {
     }
 
     let query = Expenditure.find(filter)
+      .populate("branch", "name")
       .populate("approved_by", "full_name")
       .populate("delete_requested_by", "full_name");
     if (sort) query = query.sort(sort);

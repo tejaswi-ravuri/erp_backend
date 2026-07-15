@@ -27,6 +27,39 @@ function dateRange(req) {
   return Object.keys(range).length ? range : null;
 }
 
+// Real outstanding fee balance, summed across every StudentFeeReport bucket
+// (Admission/Term/Transport/Application/Registration + old_fee/"Previous
+// Due"), clamped at 0 per bucket so a credit in one bucket never offsets
+// genuine pending in another - matches the same figure the Fee Payments
+// page's Pending Fees tab shows. Deliberately NOT sourced from
+// FeePayment.status: collectPayment() always stamps "Paid" on every real
+// payment, so a FeePayment with status "Pending" never actually exists -
+// querying that field for "pending" always returned 0.
+function pendingFeesAgg(scope) {
+  const balanceFields = [
+    "balance_adm_fee",
+    "balance_term_fee",
+    "balance_transport_fee",
+    "balance_application_fee",
+    "balance_registration_fee",
+    "old_fee",
+  ];
+  return StudentFeeReport.aggregate([
+    { $match: { ...scope, ...NOT_DELETED, status: "Active" } },
+    {
+      $project: {
+        pendingAmount: {
+          $add: balanceFields.map((f) => ({
+            $max: [{ $ifNull: [`$${f}`, 0] }, 0],
+          })),
+        },
+      },
+    },
+    { $match: { pendingAmount: { $gt: 0 } } },
+    { $group: { _id: null, total: { $sum: "$pendingAmount" }, count: { $sum: 1 } } },
+  ]);
+}
+
 // GET /api/analytics/overview
 export const overview = asyncHandler(async (req, res) => {
   const scope = scopeFor(req);
@@ -46,6 +79,7 @@ export const overview = asyncHandler(async (req, res) => {
     activeStudents,
     totalStaff,
     feeThisMonthAgg,
+    otherIncomeThisMonthAgg,
     feePendingAgg,
     todayAttendance,
     pendingAdmissions,
@@ -63,10 +97,11 @@ export const overview = asyncHandler(async (req, res) => {
       },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
-    FeePayment.aggregate([
-      { $match: { ...baseFilter, status: "Pending" } },
+    Income.aggregate([
+      { $match: { ...baseFilter, date: { $gte: startOfMonth } } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
+    pendingFeesAgg(scope),
     Attendance.aggregate([
       { $match: { ...baseFilter, date: { $gte: todayStart, $lte: todayEnd } } },
       { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -81,12 +116,17 @@ export const overview = asyncHandler(async (req, res) => {
     todayAttendance.map((a) => [a._id, a.count]),
   );
 
+  const feeCollectedThisMonth = feeThisMonthAgg[0]?.total || 0;
+  const otherIncomeThisMonth = otherIncomeThisMonthAgg[0]?.total || 0;
+
   res.json({
     branch_scope: scope.branch || "all_branches",
     total_students: totalStudents,
     active_students: activeStudents,
     total_staff: totalStaff,
-    fee_collected_this_month: feeThisMonthAgg[0]?.total || 0,
+    fee_collected_this_month: feeCollectedThisMonth,
+    other_income_this_month: otherIncomeThisMonth,
+    total_income_this_month: feeCollectedThisMonth + otherIncomeThisMonth,
     fee_pending: feePendingAgg[0]?.total || 0,
     today_attendance: {
       present: attendanceMap.Present || 0,
@@ -105,7 +145,7 @@ export const feesSummary = asyncHandler(async (req, res) => {
   const range = dateRange(req);
   if (range) match.payment_date = range;
 
-  const [byType, byMonth, byStatus, byClass] = await Promise.all([
+  const [byType, byMonth, feePaymentByStatus, byClass, pendingAgg] = await Promise.all([
     FeePayment.aggregate([
       { $match: match },
       {
@@ -152,7 +192,20 @@ export const feesSummary = asyncHandler(async (req, res) => {
       },
       { $sort: { _id: 1 } },
     ]),
+    pendingFeesAgg(scope),
   ]);
+
+  // "Pending" never comes from FeePayment.status - collectPayment() always
+  // stamps "Paid" on a real payment, so that status value never actually
+  // occurs; replace/inject the real figure from StudentFeeReport balances.
+  const byStatus = [
+    ...feePaymentByStatus.filter((s) => s._id !== "Pending"),
+    {
+      _id: "Pending",
+      total: pendingAgg[0]?.total || 0,
+      count: pendingAgg[0]?.count || 0,
+    },
+  ];
 
   res.json({
     by_fee_type: byType,
@@ -513,12 +566,18 @@ export const dashboardStats = asyncHandler(async (req, res) => {
     const totalExpenditure =
       expenditureResult.length > 0 ? expenditureResult[0].total : 0;
 
-    const netBalance = totalIncome - totalExpenditure;
+    // "Total Income" is Fee Payments + the Income model combined - was
+    // previously just `totalIncome` (Income model only), silently
+    // excluding every rupee of fee revenue from this stat and from
+    // net_balance below.
+    const combinedIncome = feeCollections + totalIncome;
+    const netBalance = combinedIncome - totalExpenditure;
 
     return {
       students: studentCount,
       fee_collections: Math.round(feeCollections * 100) / 100,
-      total_income: Math.round(totalIncome * 100) / 100,
+      other_income: Math.round(totalIncome * 100) / 100,
+      total_income: Math.round(combinedIncome * 100) / 100,
       expenses_entered: expenditureCountResult,
       total_expenditure: Math.round(totalExpenditure * 100) / 100,
       net_balance: Math.round(netBalance * 100) / 100,

@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import { ROLES } from "../config/constants.js";
 import { isAllowed } from "../rbac/permissions.js";
+import { resolveBranchQueryFilter } from "../middleware/branchScope.js";
 
 const ENTITY = "User";
 
@@ -16,7 +17,7 @@ export const list = async (req, res) => {
     if (!isAllowed(ENTITY, "read", req.user.role))
       return forbidden(res, "view");
 
-    const { role, exclude_role } = req.query;
+    const { role, exclude_role, branch } = req.query;
     if (role === ROLES.STUDENT) {
       return res.status(400).json({
         success: false,
@@ -24,7 +25,12 @@ export const list = async (req, res) => {
       });
     }
 
-    const filter = {};
+    const { allowed, filter } = resolveBranchQueryFilter(req.user, branch);
+    if (!allowed) {
+      return res
+        .status(403)
+        .json({ success: false, message: "You do not have access to that branch." });
+    }
     if (role) {
       filter.role = role;
     } else {
@@ -34,7 +40,6 @@ export const list = async (req, res) => {
       if (exclude_role) excluded.add(exclude_role);
       filter.role = { $nin: [...excluded] };
     }
-    if (req.user.branch) filter.branch = req.user.branch;
 
     const users = await User.find(filter).lean();
     return res.json({ success: true, data: users });
