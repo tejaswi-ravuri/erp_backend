@@ -42,7 +42,12 @@ export const list = async (req, res) => {
         .status(403)
         .json({ success: false, message: "You do not have access to that branch." });
     }
-    if (role) {
+    if (req.user.role === ROLES.PRINCIPAL) {
+      // Principal's Staff page only ever shows Teachers (editable) and
+      // Accounts Managers (visible, read-only) - never themselves or any
+      // other role, regardless of what the caller asks for.
+      filter.role = { $in: [ROLES.TEACHER, ROLES.ACCOUNTS_MANAGER] };
+    } else if (role) {
       filter.role = role;
     } else {
       // Always exclude students by default, on top of whatever else the
@@ -139,6 +144,12 @@ export const update = async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found." });
     }
+    if (req.user.role === ROLES.PRINCIPAL && existing.role !== ROLES.TEACHER) {
+      return res.status(403).json({
+        success: false,
+        message: "Principals can only modify Teacher records.",
+      });
+    }
 
     const { password, ...rest } = req.body;
     Object.assign(existing, rest);
@@ -178,6 +189,12 @@ export const remove = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "User not found." });
+    }
+    if (req.user.role === ROLES.PRINCIPAL && existing.role !== ROLES.TEACHER) {
+      return res.status(403).json({
+        success: false,
+        message: "Principals can only deactivate Teacher records.",
+      });
     }
 
     existing.is_active = false;

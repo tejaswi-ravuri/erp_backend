@@ -38,6 +38,20 @@ export const PERMISSIONS = {
     update: [ACCOUNTS_MANAGER, ADMIN_OFFICER],
     delete: [ACCOUNTS_MANAGER],
   },
+  // "Enquiry" page - a pre-admission lead, not yet a formal Admission.
+  AdmissionEnquiry: {
+    create: [ACCOUNTS_MANAGER, ADMIN_OFFICER],
+    read: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
+    update: [ACCOUNTS_MANAGER, ADMIN_OFFICER],
+    delete: [ACCOUNTS_MANAGER],
+  },
+  // "Sale of Application" page.
+  Application: {
+    create: [ACCOUNTS_MANAGER, ADMIN_OFFICER],
+    read: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
+    update: [ACCOUNTS_MANAGER, ADMIN_OFFICER],
+    delete: [ACCOUNTS_MANAGER],
+  },
   Class: {
     create: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
     read: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER, TEACHER],
@@ -65,7 +79,10 @@ export const PERMISSIONS = {
     studentOwnOnly: true,
   },
   Marks: {
-    create: [TEACHER, PRINCIPAL],
+    // Principal is read-only here - only Teachers enter marks (enforced in
+    // marksController.js, which doesn't consult this table directly but
+    // should stay in sync with it).
+    create: [TEACHER],
     read: [TEACHER, PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER, STUDENT],
     update: [TEACHER, PRINCIPAL],
     delete: [TEACHER, PRINCIPAL],

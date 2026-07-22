@@ -68,7 +68,13 @@ classSchema.pre("validate", function (next) {
   next();
 });
 
-classSchema.index({ branch: 1, academic_year: 1, grade: 1 }, { unique: true });
+// Only enforced among non-deleted classes - otherwise a soft-deleted class
+// permanently blocks re-adding the same grade/year/branch combination,
+// since deleteClass() never clears these fields, just flips is_deleted.
+classSchema.index(
+  { branch: 1, academic_year: 1, grade: 1 },
+  { unique: true, partialFilterExpression: { is_deleted: false } },
+);
 
 classSchema.index(
   { academic_year: 1, class_teacher_id: 1 },

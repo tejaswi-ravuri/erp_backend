@@ -22,6 +22,13 @@ const attendanceSchema = new mongoose.Schema({
 });
 
 withCommonFields(attendanceSchema);
-attendanceSchema.index({ student_id: 1, date: 1 }, { unique: true }); // one attendance record per student per day
+// One attendance record per student per subject per day - bulkMark's upsert
+// filter is { class, subject, date, student_id }, so the unique index must
+// include subject too, otherwise marking a second subject for the same
+// student on the same day collides with the first as a duplicate key.
+attendanceSchema.index(
+  { student_id: 1, date: 1, subject: 1 },
+  { unique: true },
+);
 
 export default mongoose.model("Attendance", attendanceSchema);
