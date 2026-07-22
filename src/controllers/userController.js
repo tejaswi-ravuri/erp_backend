@@ -2,6 +2,7 @@ import User from "../models/User.js";
 import { ROLES, SINGLE_BRANCH_ROLES } from "../config/constants.js";
 import { isAllowed } from "../rbac/permissions.js";
 import { resolveBranchQueryFilter } from "../middleware/branchScope.js";
+import Branch from "../models/Branch.js";
 
 const ENTITY = "User";
 
@@ -38,12 +39,10 @@ export const list = async (req, res) => {
 
     const { allowed, filter } = resolveBranchQueryFilter(req.user, branch);
     if (!allowed) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "You do not have access to that branch.",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "You do not have access to that branch.",
+      });
     }
     if (req.user.role === ROLES.PRINCIPAL) {
       // Principal's Staff page only ever shows Teachers (editable) and
@@ -108,13 +107,14 @@ export const create = async (req, res) => {
         message: "Please select a branch for this role.",
       });
     }
+    const branchDetails = await Branch.findById(branch);
 
     // User.create() runs the schema's own pre-save hook, which hashes
     // the password automatically - never hash it again here.
     const doc = await User.create({
       ...req.body,
       branch,
-      schoolName: req?.user?.schoolName || "Master Minds Default",
+      schoolName: branchDetails?.schoolName || "Master Minds Default",
     });
 
     return res.status(201).json({ success: true, data: doc.toSafeJSON() });
