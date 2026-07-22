@@ -28,7 +28,7 @@ export const list = async (req, res) => {
 
 // POST /api/branches — Admin Officer only (see branchRouter.js)
 export const create = asyncHandler(async (req, res) => {
-  const { name, code, address, phone, is_active } = req.body;
+  const { name, code, address, phone, is_active, schoolName } = req.body;
 
   if (!name || !code) {
     throw new ApiError(400, "name and code are required.");
@@ -45,7 +45,14 @@ export const create = asyncHandler(async (req, res) => {
     );
   }
 
-  const branch = await Branch.create({ name, code, address, phone, is_active });
+  const branch = await Branch.create({
+    name,
+    code,
+    address,
+    phone,
+    is_active,
+    schoolName,
+  });
 
   // Admin Officers are scoped to User.branches - only the admin_officer who
   // created this branch should gain access to it, not every admin_officer.
@@ -61,13 +68,14 @@ export const create = asyncHandler(async (req, res) => {
 
 // PUT /api/branches/:id — Admin Officer only
 export const update = asyncHandler(async (req, res) => {
-  const { name, code, address, phone, is_active } = req.body;
+  const { name, code, address, phone, is_active, schoolName } = req.body;
   const updates = {};
   if (name !== undefined) updates.name = name;
   if (code !== undefined) updates.code = code;
   if (address !== undefined) updates.address = address;
   if (phone !== undefined) updates.phone = phone;
   if (is_active !== undefined) updates.is_active = is_active;
+  if (schoolName !== undefined) updates.schoolName = schoolName;
 
   const branch = await Branch.findByIdAndUpdate(req.params.id, updates, {
     new: true,
