@@ -133,13 +133,37 @@ export const listClasses = asyncHandler(async (req, res) => {
 export const createClass = asyncHandler(async (req, res) => {
   assertAllowed("create", req.user.role);
   const body = sanitizeAndScopeBody("Class", req.user, req.body);
-  console.log(req.body, req.user);
   const branch = req.user.branch;
   if (!branch) {
     throw new ApiError(
       400,
       "No branch specified and your account has no default branch - please select a branch.",
     );
+  }
+
+  // Deleting a class is soft (is_deleted: true) - it keeps its
+  // grade/academic_year/branch, so re-adding the same class would
+  // otherwise collide with its own deleted self on the unique index and
+  // read as "already exists". Resurrect that record instead of inserting
+  // a duplicate. Old Class Teacher / subject-teacher assignments are
+  // cleared - they may be stale, and could re-violate the "one homeroom
+  // class per teacher per year" unique index if left in place.
+  const deletedMatch = await Class.findOne({
+    branch,
+    academic_year: body.academic_year,
+    grade: body.grade,
+    is_deleted: true,
+  });
+
+  if (deletedMatch) {
+    deletedMatch.is_deleted = false;
+    deletedMatch.deleted_at = null;
+    deletedMatch.capacity = body.capacity ?? null;
+    deletedMatch.class_teacher_id = null;
+    deletedMatch.subject_teachers = [];
+    deletedMatch.updated_by = req.user._id;
+    await deletedMatch.save();
+    return res.status(201).json(deletedMatch);
   }
 
   try {

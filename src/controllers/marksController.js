@@ -102,16 +102,23 @@ export const list = async (req, res) => {
 // POST /api/marks
 export const create = async (req, res) => {
   try {
+    // Only Teachers enter marks - Principal has read-only access to this
+    // page (class-wide overview / Class Teacher view), never entry.
+    if (req.user.role !== "teacher") {
+      return res.status(403).json({
+        success: false,
+        message: "Only Teachers can enter marks.",
+      });
+    }
+
     const { class: classId, subject } = req.body;
 
-    if (req.user.role === "teacher") {
-      const myAssignments = await getTeacherSubjectAssignments(req.user);
-      if (!isAssignedToClassSubject(myAssignments, classId, subject)) {
-        return res.status(403).json({
-          success: false,
-          message: "You are not assigned to teach this class/subject.",
-        });
-      }
+    const myAssignments = await getTeacherSubjectAssignments(req.user);
+    if (!isAssignedToClassSubject(myAssignments, classId, subject)) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not assigned to teach this class/subject.",
+      });
     }
 
     const record = await Marks.create({

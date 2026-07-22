@@ -4,7 +4,11 @@ const admissionEnquirySchema = new mongoose.Schema(
   {
     applicationid: { type: String, required: true, unique: true },
     studentName: { type: String, required: true },
-    branch: { type: String, required: true },
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+    },
     mobile: { type: String, required: true },
     academicYear: { type: String, required: true },
     status: { type: String, required: true },

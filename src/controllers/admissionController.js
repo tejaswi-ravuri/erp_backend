@@ -2,6 +2,7 @@ import Admission, { ADMISSION_CLASS_SOUGHT } from "../models/Admission.js";
 import Student from "../models/Student.js";
 import Class from "../models/Class.js";
 import { isAllowed } from "../rbac/permissions.js";
+import { ApiError } from "../utils/ApiError.js";
 import {
   generateUniqueId,
   generateApplicationNo,
@@ -332,12 +333,34 @@ export const convert = async (req, res) => {
   }
 };
 
+function assertEnquiryAllowed(action, role) {
+  if (!isAllowed("AdmissionEnquiry", action, role)) {
+    throw new ApiError(
+      403,
+      `Your role is not permitted to ${action} enquiry records.`,
+    );
+  }
+}
+
 export const addApplicationEnquiry = async (req, res) => {
   try {
+    assertEnquiryAllowed("create", req.user.role);
+
+    // Branch is always the caller's own (or, for multi-branch roles like
+    // Admin Officer with no fixed req.user.branch, whatever they sent) -
+    // never client-overridable for a single-branch role like Accounts
+    // Manager, mirroring Admission.create's idiom.
+    const branch = req.user.branch || req.body.branch;
+    if (!branch) {
+      return res
+        .status(400)
+        .json({ success: false, message: "A branch is required." });
+    }
+    delete req.body.branch;
+
     const requiredFields = [
       "id",
       "studentName",
-      "branch",
       "mobile",
       "academicYear",
       "status",
@@ -384,6 +407,7 @@ export const addApplicationEnquiry = async (req, res) => {
 
     const enquiryData = {
       ...req.body,
+      branch,
       added_by: req.user.id,
     };
 
@@ -391,6 +415,12 @@ export const addApplicationEnquiry = async (req, res) => {
 
     return res.status(201).json({ success: true, data: enquiry });
   } catch (err) {
+    if (err instanceof ApiError) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
     console.error("admissions.addApplicationEnquiry error:", err);
     return res.status(500).json({
       success: false,
@@ -401,6 +431,8 @@ export const addApplicationEnquiry = async (req, res) => {
 
 export const deleteApplicationEnquiry = async (req, res) => {
   try {
+    assertEnquiryAllowed("delete", req.user.role);
+
     const enquiryId = req.params.id;
 
     const enquiry = await AdmissionEnquiry.findById(enquiryId);
@@ -408,6 +440,16 @@ export const deleteApplicationEnquiry = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Application enquiry not found.",
+      });
+    }
+
+    if (
+      req.user.branch &&
+      String(enquiry.branch) !== String(req.user.branch)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to delete this enquiry.",
       });
     }
 
@@ -419,6 +461,12 @@ export const deleteApplicationEnquiry = async (req, res) => {
       data: { _id: enquiryId },
     });
   } catch (err) {
+    if (err instanceof ApiError) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
     console.error("admissions.deleteApplicationEnquiry error:", err);
     return res.status(500).json({
       success: false,
@@ -429,6 +477,8 @@ export const deleteApplicationEnquiry = async (req, res) => {
 
 export const getApplicationEnquiryById = async (req, res) => {
   try {
+    assertEnquiryAllowed("read", req.user.role);
+
     const enquiry = await AdmissionEnquiry.findById(req.params.id);
     if (!enquiry) {
       return res.status(404).json({
@@ -437,7 +487,10 @@ export const getApplicationEnquiryById = async (req, res) => {
       });
     }
 
-    if (req.user.branch && enquiry.branch !== req.user.branch) {
+    if (
+      req.user.branch &&
+      String(enquiry.branch) !== String(req.user.branch)
+    ) {
       return res.status(403).json({
         success: false,
         message: "You do not have permission to view this enquiry.",
@@ -446,6 +499,12 @@ export const getApplicationEnquiryById = async (req, res) => {
 
     return res.status(200).json({ success: true, data: enquiry });
   } catch (err) {
+    if (err instanceof ApiError) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
     console.error("admissions.getApplicationEnquiryById error:", err.message);
     return res.status(500).json({
       success: false,
@@ -456,6 +515,8 @@ export const getApplicationEnquiryById = async (req, res) => {
 
 export const updateApplicationEnquiry = async (req, res) => {
   try {
+    assertEnquiryAllowed("update", req.user.role);
+
     const enquiryId = req.params.id;
 
     const enquiry = await AdmissionEnquiry.findById(enquiryId);
@@ -466,16 +527,20 @@ export const updateApplicationEnquiry = async (req, res) => {
       });
     }
 
-    if (req.user.branch && enquiry.branch !== req.user.branch) {
+    if (
+      req.user.branch &&
+      String(enquiry.branch) !== String(req.user.branch)
+    ) {
       return res.status(403).json({
         success: false,
         message: "You do not have permission to update this enquiry.",
       });
     }
 
+    delete req.body.branch; // branch is immutable via this endpoint
+
     const requiredFields = [
       "studentName",
-      "branch",
       "mobile",
       "academicYear",
       "status",
@@ -512,6 +577,12 @@ export const updateApplicationEnquiry = async (req, res) => {
       data: enquiry,
     });
   } catch (err) {
+    if (err instanceof ApiError) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
     console.error("admissions.updateApplicationEnquiry error:", err);
     return res.status(500).json({
       success: false,
@@ -522,6 +593,8 @@ export const updateApplicationEnquiry = async (req, res) => {
 
 export const listApplicationEnquiries = async (req, res) => {
   try {
+    assertEnquiryAllowed("read", req.user.role);
+
     const filter = {};
 
     if (req.query.status) {
@@ -533,8 +606,17 @@ export const listApplicationEnquiries = async (req, res) => {
     if (req.query.className) {
       filter.className = req.query.className;
     }
-    if (req.query.branch) {
-      filter.branch = req.query.branch;
+    // Single-branch roles (Accounts Manager) are always scoped to their own
+    // branch - they can never see another branch's enquiries, regardless
+    // of what a client sends.
+    if (req.user.branch) {
+      filter.branch = req.user.branch;
+    }
+    if (req.query.date_from || req.query.date_to) {
+      filter.date = {};
+      if (req.query.date_from) filter.date.$gte = new Date(req.query.date_from);
+      if (req.query.date_to)
+        filter.date.$lte = new Date(`${req.query.date_to}T23:59:59.999Z`);
     }
 
     let query = AdmissionEnquiry.find(filter);
@@ -585,8 +667,19 @@ export const listApplicationEnquiries = async (req, res) => {
 };
 
 // Application routes
+function assertApplicationAllowed(action, role) {
+  if (!isAllowed("Application", action, role)) {
+    throw new ApiError(
+      403,
+      `Your role is not permitted to ${action} application records.`,
+    );
+  }
+}
+
 export const addApplication = async (req, res) => {
   try {
+    assertApplicationAllowed("create", req.user.role);
+
     const requiredFields = [
       "studentName",
       "fatherName",
@@ -630,6 +723,12 @@ export const addApplication = async (req, res) => {
 
     return res.status(201).json({ success: true, data: application });
   } catch (err) {
+    if (err instanceof ApiError) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
     console.log("admissions.addApplication error:", err);
     return res.status(500).json({
       success: false,
@@ -638,30 +737,48 @@ export const addApplication = async (req, res) => {
   }
 };
 
+// GET /api/admissions/applications - filters read from req.query (this is a
+// GET route; req.body is never populated by any real HTTP client here).
 export const listApplications = async (req, res) => {
   try {
+    assertApplicationAllowed("read", req.user.role);
+
     const filter = {};
 
-    if (req.body.status) {
-      filter.status = req.body.status;
+    if (req.query.status === "Converted") {
+      filter.isAdmitted = true;
+    } else if (req.query.status === "Pending") {
+      filter.isAdmitted = false;
     }
 
-    if (req.body.academicYear) {
-      filter.academicYear = req.body.academicYear;
+    if (req.query.academicYear) {
+      filter.academicYear = req.query.academicYear;
     }
 
-    if (req.body.className) {
-      filter.className = req.body.className;
+    if (req.query.className) {
+      filter.className = req.query.className;
     }
 
-    if (req.body.branch) {
-      filter.branch = req.body.branch;
+    // Single-branch roles (Accounts Manager) are always scoped to their own
+    // branch - they can never see another branch's applications.
+    if (req.user.branch) {
+      filter.branch = req.user.branch;
+    }
+
+    if (req.query.date_from || req.query.date_to) {
+      filter.createdAt = {};
+      if (req.query.date_from)
+        filter.createdAt.$gte = new Date(req.query.date_from);
+      if (req.query.date_to)
+        filter.createdAt.$lte = new Date(
+          `${req.query.date_to}T23:59:59.999Z`,
+        );
     }
 
     let query = Application.find(filter);
 
-    if (req.body.search) {
-      const searchRegex = new RegExp(req.body.search, "i");
+    if (req.query.search) {
+      const searchRegex = new RegExp(req.query.search, "i");
       query = query.or([
         { studentName: searchRegex },
         { applicationNo: searchRegex },
@@ -670,15 +787,15 @@ export const listApplications = async (req, res) => {
       ]);
     }
 
-    query = query.sort({ createdAt: -1, date: -1 });
+    query = query.sort({ createdAt: -1 });
 
-    if (req.body.page && req.body.limit) {
-      const page = parseInt(req.body.page);
-      const limit = parseInt(req.body.limit);
+    if (req.query.page && req.query.limit) {
+      const page = parseInt(req.query.page);
+      const limit = parseInt(req.query.limit);
       const skip = (page - 1) * limit;
       query = query.skip(skip).limit(limit);
-    } else if (req.body.limit) {
-      query = query.limit(parseInt(req.body.limit));
+    } else if (req.query.limit) {
+      query = query.limit(parseInt(req.query.limit));
     }
 
     const applications = await query.exec();
@@ -689,14 +806,20 @@ export const listApplications = async (req, res) => {
       data: applications,
       pagination: {
         total,
-        page: parseInt(req.body.page) || 1,
-        limit: parseInt(req.body.limit) || applications.length,
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || applications.length,
         pages: Math.ceil(
-          total / (parseInt(req.body.limit) || applications.length || 1),
+          total / (parseInt(req.query.limit) || applications.length || 1),
         ),
       },
     });
   } catch (err) {
+    if (err instanceof ApiError) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
     console.error("admissions.listApplications error:", err.message);
     return res.status(500).json({
       success: false,
@@ -707,6 +830,8 @@ export const listApplications = async (req, res) => {
 
 export const getApplicationById = async (req, res) => {
   try {
+    assertApplicationAllowed("read", req.user.role);
+
     const application = await Application.findById(req.params.id);
     if (!application) {
       return res.status(404).json({
@@ -727,6 +852,12 @@ export const getApplicationById = async (req, res) => {
 
     return res.status(200).json({ success: true, data: application });
   } catch (err) {
+    if (err instanceof ApiError) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
     console.error("admissions.getApplicationById error:", err.message);
     return res.status(500).json({
       success: false,
@@ -737,6 +868,8 @@ export const getApplicationById = async (req, res) => {
 
 export const updateApplication = async (req, res) => {
   try {
+    assertApplicationAllowed("update", req.user.role);
+
     const applicationId = req.params.id;
 
     const application = await Application.findById(applicationId);
@@ -758,6 +891,8 @@ export const updateApplication = async (req, res) => {
       });
     }
 
+    delete req.body.branch; // branch is immutable via this endpoint
+
     Object.assign(application, req.body);
     await application.save();
 
@@ -767,6 +902,12 @@ export const updateApplication = async (req, res) => {
       data: application,
     });
   } catch (err) {
+    if (err instanceof ApiError) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
     console.error("admissions.updateApplication error:", err);
     return res.status(500).json({
       success: false,
@@ -777,6 +918,8 @@ export const updateApplication = async (req, res) => {
 
 export const deleteApplication = async (req, res) => {
   try {
+    assertApplicationAllowed("delete", req.user.role);
+
     const applicationId = req.params.id;
 
     const application = await Application.findById(applicationId);
@@ -805,6 +948,12 @@ export const deleteApplication = async (req, res) => {
       data: { _id: applicationId },
     });
   } catch (err) {
+    if (err instanceof ApiError) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
     console.error("admissions.deleteApplication error:", err);
     return res.status(500).json({
       success: false,

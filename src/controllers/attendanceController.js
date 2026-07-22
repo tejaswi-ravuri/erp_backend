@@ -10,7 +10,8 @@ import {
 // GET /api/attendance
 export const list = async (req, res) => {
   try {
-    const { date, subject, class: classId, sort, limit } = req.query;
+    const { date, subject, sort, limit } = req.query;
+    const classId = req.query.class_id || req.query.class;
     const branchFilter = buildScopeFilter("Attendance", req.user);
 
     const filter = { ...branchFilter };
@@ -29,23 +30,46 @@ export const list = async (req, res) => {
           });
         }
       } else {
-        // Monthly / analytics view with no subject filter: only classes
-        // where this teacher is the Class Teacher (whole-class overview).
+        // Broader / analytics view: everything this teacher is allowed to
+        // see - every subject for classes they're Class Teacher of, plus
+        // their own subject in any other class they teach. Mirrors
+        // marksController's list() so a subject-only teacher (never a
+        // homeroom Class Teacher) still sees their own attendance data
+        // instead of an always-empty result.
         const classTeacherClassIds = await getClassTeacherClassIds(req.user);
+        const myAssignments = await getTeacherSubjectAssignments(req.user);
 
-        if (classId && !classTeacherClassIds.includes(String(classId))) {
-          return res.status(403).json({
-            success: false,
-            message:
-              "You can only view overall attendance for classes you are Class Teacher of.",
-          });
+        if (classId) {
+          const isClassTeacher = classTeacherClassIds.includes(
+            String(classId),
+          );
+          const myAssignmentsHere = myAssignments.filter(
+            (a) => String(a.class_id) === String(classId),
+          );
+          if (!isClassTeacher && myAssignmentsHere.length === 0) {
+            return res.status(403).json({
+              success: false,
+              message: "You do not have access to attendance for this class.",
+            });
+          }
+          filter.class = classId;
+          // A subject-only teacher (not Class Teacher here) only ever
+          // sees their own subject's records for this class.
+          if (!isClassTeacher) {
+            filter.subject = { $in: myAssignmentsHere.map((a) => a.subject) };
+          }
+        } else {
+          if (classTeacherClassIds.length === 0 && myAssignments.length === 0) {
+            return res.json({ success: true, data: [] });
+          }
+          filter.$or = [
+            { class: { $in: classTeacherClassIds } },
+            ...myAssignments.map((a) => ({
+              class: a.class_id,
+              subject: a.subject,
+            })),
+          ];
         }
-
-        if (classTeacherClassIds.length === 0) {
-          return res.json({ success: true, data: [] });
-        }
-
-        filter.class = classId || { $in: classTeacherClassIds };
       }
     }
 
