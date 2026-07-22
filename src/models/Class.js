@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { withCommonFields } from "./_baseSchema.js";
 
 const GRADES = [
+  "NURSERY",
   "LKG",
   "UKG",
   "1",
