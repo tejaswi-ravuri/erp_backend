@@ -59,6 +59,10 @@ const studentSchema = new mongoose.Schema({
     default: "Active",
   },
   photo_url: { type: String },
+  schoolName: {
+    type: String,
+    required: true,
+  },
 });
 
 withCommonFields(studentSchema);

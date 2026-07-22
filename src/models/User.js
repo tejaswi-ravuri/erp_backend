@@ -71,6 +71,10 @@ const userSchema = new mongoose.Schema(
       },
     },
     address: { type: addressSchema, default: null },
+    schoolName: {
+      type: String,
+      required: true,
+    },
 
     // Staff-profile fields - live directly on User since there's no separate Staff collection.
     subject_taught: { type: [String], default: [] }, // teacher only

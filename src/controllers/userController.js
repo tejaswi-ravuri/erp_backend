@@ -40,7 +40,10 @@ export const list = async (req, res) => {
     if (!allowed) {
       return res
         .status(403)
-        .json({ success: false, message: "You do not have access to that branch." });
+        .json({
+          success: false,
+          message: "You do not have access to that branch.",
+        });
     }
     if (req.user.role === ROLES.PRINCIPAL) {
       // Principal's Staff page only ever shows Teachers (editable) and
@@ -111,6 +114,7 @@ export const create = async (req, res) => {
     const doc = await User.create({
       ...req.body,
       branch,
+      schoolName: req?.user?.schoolName || "Master Minds Default",
     });
 
     return res.status(201).json({ success: true, data: doc.toSafeJSON() });

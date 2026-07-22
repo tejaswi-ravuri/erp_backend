@@ -96,6 +96,7 @@ export const createStudent = asyncHandler(async (req, res) => {
     ...body,
     created_by: req.user._id,
     updated_by: req.user._id,
+    schoolName: req.user.schoolName || "Master Minds Default",
   });
   res.status(201).json(doc);
 });
@@ -114,6 +115,7 @@ export const bulkCreateStudents = asyncHandler(async (req, res) => {
     ...sanitizeAndScopeBody("Student", req.user, item),
     created_by: req.user._id,
     updated_by: req.user._id,
+    schoolName: req.user.schoolName || "Master Minds Default",
   }));
 
   try {
