@@ -15,6 +15,10 @@ const branchSchema = new mongoose.Schema(
     address: { type: addressSchema, required: true },
     phone: { type: String, trim: true },
     is_active: { type: Boolean, default: true },
+    schoolName: {
+      type: String,
+      default: true,
+    },
   },
   { timestamps: { createdAt: "created_date", updatedAt: "updated_date" } },
 );
