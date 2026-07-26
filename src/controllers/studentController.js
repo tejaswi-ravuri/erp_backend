@@ -1,6 +1,7 @@
 // controllers/studentController.js
 import mongoose from "mongoose";
 import Student from "../models/Student.js";
+import StudentFeeReport from "../models/StudentFeeReport.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { isAllowed } from "../rbac/permissions.js";
@@ -161,6 +162,98 @@ export const updateStudent = asyncHandler(async (req, res) => {
   );
   if (!doc) throw new ApiError(404, "Student record not found.");
   res.json(doc);
+});
+
+// POST /api/students/promote
+// body: { student_ids: [...], class: <target Class _id> }
+// Moves a batch of students to a higher class in a later academic year.
+// Every selected student must currently be in the same class as the
+// target's branch, in a strictly lower grade, and in a strictly earlier
+// academic year - otherwise nothing is written (all-or-nothing). Their
+// linked StudentFeeReport(s), if any, follow the class change and flip to
+// student_type "Existing" since a promoted student is a continuing
+// student, not a fresh admission.
+export const promoteStudents = asyncHandler(async (req, res) => {
+  assertAllowed("update", req.user.role);
+
+  const { student_ids, class: newClassId } = req.body;
+  if (!Array.isArray(student_ids) || student_ids.length === 0 || !newClassId) {
+    throw new ApiError(
+      400,
+      "student_ids (a non-empty array) and class are required.",
+    );
+  }
+
+  const targetClass = await Class.findOne({
+    _id: newClassId,
+    is_deleted: { $ne: true },
+  }).lean();
+  if (!targetClass) throw new ApiError(404, "Target class not found.");
+
+  const scope = buildScopeFilter("Student", req.user);
+  const students = await Student.find({
+    _id: { $in: student_ids },
+    ...scope,
+  }).lean();
+  if (students.length !== student_ids.length) {
+    throw new ApiError(
+      404,
+      "One or more selected students were not found.",
+    );
+  }
+
+  const currentClassIds = [...new Set(students.map((s) => String(s.class)))];
+  const currentClasses = await Class.find({
+    _id: { $in: currentClassIds },
+  }).lean();
+  const currentClassMap = Object.fromEntries(
+    currentClasses.map((c) => [String(c._id), c]),
+  );
+
+  const errors = [];
+  for (const s of students) {
+    if (String(s.branch) !== String(targetClass.branch)) {
+      errors.push(
+        `${s.full_name}: target class belongs to a different branch.`,
+      );
+      continue;
+    }
+    const current = currentClassMap[String(s.class)];
+    if (!current) {
+      errors.push(`${s.full_name}: current class could not be resolved.`);
+      continue;
+    }
+    if (targetClass.grade_order <= current.grade_order) {
+      errors.push(
+        `${s.full_name}: can only be promoted to a higher class than their current one.`,
+      );
+      continue;
+    }
+    if (!(targetClass.academic_year > current.academic_year)) {
+      errors.push(
+        `${s.full_name}: target class must be from a later academic year.`,
+      );
+    }
+  }
+  if (errors.length > 0) {
+    throw new ApiError(400, errors.join(" "));
+  }
+
+  const studentIds = students.map((s) => s._id);
+  await Student.updateMany(
+    { _id: { $in: studentIds } },
+    { class: targetClass._id, updated_by: req.user._id },
+  );
+  await StudentFeeReport.updateMany(
+    { student_id: { $in: studentIds } },
+    { class: targetClass._id, student_type: "Existing" },
+  );
+
+  res.json({
+    success: true,
+    promoted: studentIds.length,
+    class: targetClass._id,
+  });
 });
 
 // DELETE /api/students/:id

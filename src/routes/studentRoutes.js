@@ -6,6 +6,7 @@ import {
   createStudent,
   bulkCreateStudents,
   updateStudent,
+  promoteStudents,
   deleteStudent,
 } from "../controllers/studentController.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -17,6 +18,7 @@ studentRoutes.get("/", listStudents);
 studentRoutes.get("/:id", getStudentById);
 studentRoutes.post("/", createStudent);
 studentRoutes.post("/bulk", bulkCreateStudents);
+studentRoutes.post("/promote", promoteStudents);
 studentRoutes.put("/:id", updateStudent);
 studentRoutes.delete("/:id", deleteStudent);
 

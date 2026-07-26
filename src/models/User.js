@@ -93,6 +93,18 @@ const userSchema = new mongoose.Schema(
     is_active: { type: Boolean, default: true },
     last_login_at: { type: Date, default: null },
     refresh_token_version: { type: Number, default: 0 },
+
+    // Deactivation-approval workflow: an Accounts Manager can only request
+    // a staff member be deactivated - the Principal must approve or reject
+    // it before is_active actually flips (see userController.js
+    // requestDelete/approveDeleteRequest/rejectDeleteRequest).
+    delete_requested: { type: Boolean, default: false },
+    delete_requested_by: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    delete_requested_at: { type: Date, default: null },
   },
   { timestamps: { createdAt: "created_date", updatedAt: "updated_date" } },
 );

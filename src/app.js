@@ -25,6 +25,7 @@ import studentFeeReportRoutes from "./routes/studentFeeReportRoutes.js";
 import incomeRoutes from "./routes/incomeRoutes.js";
 import expenditureRoutes from "./routes/expenditureRoutes.js";
 import feePaymentRoutes from "./routes/feePaymentRouter.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 
 dotenv.config();
 
@@ -71,6 +72,7 @@ app.use("/api/marks", marksRouter);
 app.use("/api/homework", homeworkRouter);
 app.use("/api/admissions", admissionRouter);
 app.use("/api/branches", branchRouter);
+app.use("/api/notifications", notificationRoutes);
 app.use("/api/fee", studentFeeReportRoutes);
 app.use("/api/income", incomeRoutes);
 app.use("/api/expenditure", expenditureRoutes);

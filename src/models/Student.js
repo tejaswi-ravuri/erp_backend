@@ -59,6 +59,7 @@ const studentSchema = new mongoose.Schema({
     default: "Active",
   },
   photo_url: { type: String },
+  is_hosteler: { type: Boolean, default: false },
   schoolName: {
     type: String,
     required: true,

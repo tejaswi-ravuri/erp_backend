@@ -43,6 +43,7 @@ const feePaymentSchema = new mongoose.Schema({
       "Transport Fee",
       "Term Fee",
       "Registration Fee",
+      "Hostel Fee",
     ],
     required: true,
   },

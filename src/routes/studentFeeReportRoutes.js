@@ -4,10 +4,13 @@ import express from "express";
 import { requireAuth } from "../middleware/auth.js";
 import {
   listReports,
+  reportSummary,
+  listPendingFees,
   createReport,
   updateReport,
   removeReport,
   listPayments,
+  paymentsSummary,
   listEligibleStudents,
   collectPayment,
   createPayment,
@@ -19,6 +22,9 @@ const studentFeeReportRoutes = express.Router();
 
 studentFeeReportRoutes.use(requireAuth);
 studentFeeReportRoutes.get("/eligible-students", listEligibleStudents);
+studentFeeReportRoutes.get("/report-summary", reportSummary);
+studentFeeReportRoutes.get("/pending", listPendingFees);
+studentFeeReportRoutes.get("/payments-summary", paymentsSummary);
 
 studentFeeReportRoutes.get("/", listReports);
 studentFeeReportRoutes.get("/listPayments", listPayments);

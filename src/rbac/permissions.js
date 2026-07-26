@@ -30,7 +30,11 @@ export const PERMISSIONS = {
     create: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
     read: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
     update: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
-    delete: [PRINCIPAL, ADMIN_OFFICER, ACCOUNTS_MANAGER],
+    // Accounts Manager deliberately excluded: they can only *request* a
+    // staff deactivation (POST /:id/request-delete, route-gated separately
+    // in userRouter.js), never deactivate directly - only Principal/Admin
+    // Officer can via this permission-guarded DELETE /:id.
+    delete: [PRINCIPAL, ADMIN_OFFICER],
   },
   Admission: {
     create: [ACCOUNTS_MANAGER, ADMIN_OFFICER],

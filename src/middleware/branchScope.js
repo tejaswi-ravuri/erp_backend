@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { MULTI_BRANCH_ROLES, ROLES } from "../config/constants.js";
 import { getPermissionRule } from "../rbac/permissions.js";
 import { ApiError } from "../utils/ApiError.js";
@@ -46,20 +47,37 @@ export function buildScopeFilter(
  * caller can 403 rather than silently leaking another branch's records.
  */
 export function resolveBranchQueryFilter(user, queryBranch) {
-  if (user.branch) return { allowed: true, filter: { branch: user.branch } };
-
-  if (user.role === ROLES.SUPER_ADMIN) {
-    return { allowed: true, filter: queryBranch ? { branch: queryBranch } : {} };
+  // A stray `branch` value on a multi-branch role (e.g. left over from
+  // account creation) must never hijack their scoping - only single-branch
+  // roles are pinned by `user.branch`.
+  if (user.branch && !MULTI_BRANCH_ROLES.includes(user.role)) {
+    return { allowed: true, filter: { branch: user.branch } };
   }
 
-  const assigned = (user.branches || []).map((b) => b.toString());
+  // `queryBranch` is always a raw string (an Express query param) and
+  // `user.branches` elements, once `.toString()`'d, become plain strings
+  // too - fine for `.find()`/`.countDocuments()` (Mongoose casts query
+  // values against the schema), but NOT for `.aggregate()`, whose `$match`
+  // stage is handed straight to MongoDB with no casting at all. A string
+  // `branch` there silently matches zero documents against the real
+  // ObjectId-typed field, which is exactly why every aggregate-backed
+  // endpoint (reportSummary/listPendingFees/paymentsSummary) returns all
+  // zeros for multi-branch roles. Casting explicitly here fixes it for
+  // every caller, `.find()` included.
+  if (user.role === ROLES.SUPER_ADMIN) {
+    if (!queryBranch) return { allowed: true, filter: {} };
+    if (!mongoose.isValidObjectId(queryBranch)) return { allowed: false, filter: {} };
+    return { allowed: true, filter: { branch: new mongoose.Types.ObjectId(queryBranch) } };
+  }
+
+  const assigned = user.branches || [];
   if (!queryBranch) {
     return { allowed: true, filter: { branch: { $in: assigned } } };
   }
-  if (!assigned.includes(String(queryBranch))) {
+  if (!assigned.some((b) => String(b) === String(queryBranch))) {
     return { allowed: false, filter: {} };
   }
-  return { allowed: true, filter: { branch: queryBranch } };
+  return { allowed: true, filter: { branch: new mongoose.Types.ObjectId(queryBranch) } };
 }
 
 /**

@@ -189,12 +189,11 @@ export const updateClass = asyncHandler(async (req, res) => {
   delete clean.subject_teachers; // managed only via the dedicated endpoints below
 
   try {
-    const doc = await Class.findOneAndUpdate(
-      { _id: req.params.id, ...scope },
-      { ...clean, updated_by: req.user._id },
-      { new: true, runValidators: true },
-    );
+    const doc = await Class.findOne({ _id: req.params.id, ...scope });
     if (!doc) throw new ApiError(404, "Class record not found.");
+    Object.assign(doc, clean);
+    doc.updated_by = req.user._id;
+    await doc.save();
     res.json(doc);
   } catch (err) {
     const friendly = friendlyDuplicateError(err);

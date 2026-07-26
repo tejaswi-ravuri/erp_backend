@@ -17,7 +17,8 @@ const branchSchema = new mongoose.Schema(
     is_active: { type: Boolean, default: true },
     schoolName: {
       type: String,
-      default: true,
+      default: "",
+      trim: true,
     },
   },
   { timestamps: { createdAt: "created_date", updatedAt: "updated_date" } },

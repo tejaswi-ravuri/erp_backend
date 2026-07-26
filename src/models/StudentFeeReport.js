@@ -60,6 +60,13 @@ const studentFeeReportSchema = new mongoose.Schema({
   paid_transport_fee: { type: Number, default: 0 },
   balance_transport_fee: { type: Number },
 
+  has_hostel_fee: { type: Boolean, default: false },
+  hostel_gross_fee: { type: Number, default: 0 },
+  hostel_concession: { type: Number, default: 0 },
+  net_hostel_fee: { type: Number },
+  paid_hostel_fee: { type: Number, default: 0 },
+  balance_hostel_fee: { type: Number },
+
   has_application_fee: { type: Boolean, default: false },
   application_gross_fee: { type: Number, default: 0 },
   application_concession: { type: Number, default: 0 },
@@ -89,6 +96,10 @@ studentFeeReportSchema.pre("validate", function (next) {
     (this.transport_gross_fee || 0) - (this.transport_concession || 0);
   this.balance_transport_fee =
     this.net_transport_fee - (this.paid_transport_fee || 0);
+  this.net_hostel_fee =
+    (this.hostel_gross_fee || 0) - (this.hostel_concession || 0);
+  this.balance_hostel_fee =
+    this.net_hostel_fee - (this.paid_hostel_fee || 0);
   this.net_application_fee =
     (this.application_gross_fee || 0) - (this.application_concession || 0);
   this.balance_application_fee =

@@ -1,5 +1,6 @@
 import Student from "../models/Student.js";
-import Staff from "../models/Staff.js";
+import User from "../models/User.js";
+import Class from "../models/Class.js";
 import Attendance from "../models/Attendance.js";
 import Marks from "../models/Marks.js";
 import FeePayment from "../models/FeePayment.js";
@@ -9,7 +10,7 @@ import Expenditure from "../models/Expenditure.js";
 import Admission from "../models/Admission.js";
 import Branch from "../models/Branch.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { BRANCHES } from "../config/constants.js";
+import { BRANCHES, ROLES } from "../config/constants.js";
 
 const NOT_DELETED = { is_deleted: { $ne: true } };
 
@@ -40,6 +41,7 @@ function pendingFeesAgg(scope) {
     "balance_adm_fee",
     "balance_term_fee",
     "balance_transport_fee",
+    "balance_hostel_fee",
     "balance_application_fee",
     "balance_registration_fee",
     "old_fee",
@@ -74,6 +76,27 @@ export const overview = asyncHandler(async (req, res) => {
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
 
+  // Attendance (models/Attendance.js) has no `branch` field of its own -
+  // it only stores `class` as the Class document's _id (as a string, see
+  // attendanceController.js). Matching `branch` directly against it (as
+  // baseFilter does for every other collection here) matches zero
+  // documents for any single-branch role, since that field never exists
+  // on an Attendance record - it only LOOKED like it worked for
+  // super_admin/admin_officer because an unset `scope.branch` skips the
+  // filter entirely and returns every branch's attendance unscoped.
+  // Resolve this branch's Class _ids first and match against those instead.
+  const attendanceMatch = {
+    ...NOT_DELETED,
+    date: { $gte: todayStart, $lte: todayEnd },
+  };
+  if (scope.branch) {
+    const branchClassIds = await Class.find({
+      branch: scope.branch,
+      is_deleted: { $ne: true },
+    }).distinct("_id");
+    attendanceMatch.class = { $in: branchClassIds.map(String) };
+  }
+
   const [
     totalStudents,
     activeStudents,
@@ -86,7 +109,11 @@ export const overview = asyncHandler(async (req, res) => {
   ] = await Promise.all([
     Student.countDocuments(baseFilter),
     Student.countDocuments({ ...baseFilter, status: "Active" }),
-    Staff.countDocuments({ ...baseFilter, status: "Active" }),
+    User.countDocuments({
+      ...baseFilter,
+      role: { $ne: ROLES.STUDENT },
+      is_active: true,
+    }),
     FeePayment.aggregate([
       {
         $match: {
@@ -103,7 +130,7 @@ export const overview = asyncHandler(async (req, res) => {
     ]),
     pendingFeesAgg(scope),
     Attendance.aggregate([
-      { $match: { ...baseFilter, date: { $gte: todayStart, $lte: todayEnd } } },
+      { $match: attendanceMatch },
       { $group: { _id: "$status", count: { $sum: 1 } } },
     ]),
     Admission.countDocuments({
@@ -401,7 +428,7 @@ export const branchComparison = asyncHandler(async (req, res) => {
       const match = { branch, ...NOT_DELETED };
       const [students, staff, feeAgg, attendanceAgg] = await Promise.all([
         Student.countDocuments(match),
-        Staff.countDocuments(match),
+        User.countDocuments({ ...match, role: { $ne: ROLES.STUDENT } }),
         FeePayment.aggregate([
           { $match: { ...match, status: "Paid" } },
           { $group: { _id: null, total: { $sum: "$amount" } } },
